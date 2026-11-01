@@ -1,0 +1,517 @@
+{
+  "schema_version": 2,
+  "source": {
+    "name": "Computer_Network_Term_Project___Socket_Programming-1047532-17880926607939.pdf",
+    "sha256": "6ac5f0db4fffbb5b70b9d57823377fbff0c77affde79cb0ff8b1bfa42b117647",
+    "size_bytes": 255654
+  },
+  "languages": [
+    "en"
+  ],
+  "renderer": {
+    "library": "PyMuPDF",
+    "version": "1.28.2",
+    "dpi": 200,
+    "min_text_chars": 24,
+    "page_assets": "assets/pages",
+    "embedded_assets": "assets/embedded"
+  },
+  "page_count": 2,
+  "pages": [
+    {
+      "page": 1,
+      "status": "embedded_text",
+      "agent_review": {
+        "status": "complete",
+        "method": "direct-agent-vision",
+        "artifacts": [
+          "assets/pages/page-0001.png",
+          "assets/embedded/page-0001-image-01.png",
+          "assets/crops/page-0001-client-server.png"
+        ],
+        "gaps": [],
+        "reviewed_on": "2026-11-01"
+      },
+      "rotation": 0,
+      "dimensions": {
+        "width": 595.44,
+        "height": 841.68,
+        "unit": "pt"
+      },
+      "embedded_text_chars": 1258,
+      "text_blocks": [],
+      "rendered_page": "assets/pages/page-0001.png",
+      "images": [
+        {
+          "index": 1,
+          "bbox": [
+            150.62,
+            97.68,
+            482.89,
+            281.4
+          ],
+          "width": 1255,
+          "height": 696,
+          "ext": "png",
+          "path": "assets/embedded/page-0001-image-01.png",
+          "sha256": "4e4e9bd587e8abb6ea6f6bb6cddd690e1d8882f26c42329e95998e299c7a46c2",
+          "bytes": 165480
+        }
+      ],
+      "drawings": {
+        "count": 5,
+        "items": 5,
+        "bboxes": [
+          {
+            "bbox": [
+              122.64,
+              550.56,
+              334.56,
+              551.28
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              122.64,
+              586.56,
+              260.64,
+              587.28
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              122.64,
+              622.32,
+              489.12,
+              623.04
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              122.64,
+              658.32,
+              413.76,
+              659.04
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              122.64,
+              694.08,
+              364.56,
+              694.8
+            ],
+            "items": 1,
+            "type": "f"
+          }
+        ]
+      },
+      "visual_candidate": true,
+      "visual_reasons": [
+        "embedded_images",
+        "vector_drawings"
+      ],
+      "visual_recovery": [
+        {
+          "kind": "source_crop",
+          "path": "assets/crops/page-0001-client-server.png",
+          "bbox": [
+            150.62,
+            97.68,
+            482.89,
+            281.4
+          ],
+          "unit": "pt",
+          "dpi": 300,
+          "padding": 0,
+          "description": "One server, two clients, arrows in both directions between each client and server."
+        }
+      ]
+    },
+    {
+      "page": 2,
+      "status": "embedded_text",
+      "agent_review": {
+        "status": "complete",
+        "method": "direct-agent-vision",
+        "artifacts": [
+          "assets/pages/page-0002.png"
+        ],
+        "gaps": [],
+        "reviewed_on": "2026-11-01"
+      },
+      "rotation": 0,
+      "dimensions": {
+        "width": 595.44,
+        "height": 841.68,
+        "unit": "pt"
+      },
+      "embedded_text_chars": 2760,
+      "text_blocks": [],
+      "rendered_page": "assets/pages/page-0002.png",
+      "images": [],
+      "drawings": {
+        "count": 33,
+        "items": 33,
+        "bboxes": [
+          {
+            "bbox": [
+              183.6,
+              67.68,
+              307.68,
+              68.16
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              476.88,
+              246.24,
+              534.48,
+              246.72
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              86.64,
+              261.84,
+              170.64,
+              262.32
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              440.16,
+              474.96,
+              530.88,
+              475.44
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              100.32,
+              490.56,
+              239.76,
+              491.04
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              446.88,
+              656.16,
+              541.92,
+              656.64
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              100.32,
+              672.0,
+              270.96,
+              672.48
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              50.64,
+              727.68,
+              51.6,
+              733.68
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              50.64,
+              727.68,
+              51.6,
+              728.64
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              51.6,
+              727.68,
+              284.16,
+              728.64
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              284.16,
+              728.64,
+              285.12,
+              733.68
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              284.16,
+              727.68,
+              285.12,
+              728.64
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              285.12,
+              727.68,
+              525.12,
+              728.64
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              525.12,
+              727.68,
+              526.08,
+              733.68
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              525.12,
+              727.68,
+              526.08,
+              728.64
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              50.64,
+              733.68,
+              51.6,
+              752.88
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              284.16,
+              733.68,
+              285.12,
+              752.88
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              525.12,
+              733.68,
+              526.08,
+              752.88
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              50.64,
+              752.88,
+              51.6,
+              758.88
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              51.6,
+              752.88,
+              284.16,
+              753.84
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              284.16,
+              752.88,
+              285.12,
+              758.88
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              285.12,
+              752.88,
+              525.12,
+              753.84
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              525.12,
+              752.88,
+              526.08,
+              758.88
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              50.64,
+              758.88,
+              51.6,
+              778.32
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              50.64,
+              778.32,
+              51.6,
+              779.28
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              50.64,
+              778.32,
+              51.6,
+              779.28
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              51.6,
+              778.32,
+              284.16,
+              779.28
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              284.16,
+              758.88,
+              285.12,
+              778.32
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              284.16,
+              778.32,
+              285.12,
+              779.28
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              285.12,
+              778.32,
+              525.12,
+              779.28
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              525.12,
+              758.88,
+              526.08,
+              778.32
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              525.12,
+              778.32,
+              526.08,
+              779.28
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              525.12,
+              778.32,
+              526.08,
+              779.28
+            ],
+            "items": 1,
+            "type": "f"
+          }
+        ]
+      },
+      "visual_candidate": true,
+      "visual_reasons": [
+        "vector_drawings"
+      ]
+    }
+  ],
+  "errors": [],
+  "review_summary": {
+    "status": "complete",
+    "pages_reviewed": 2,
+    "gaps": [],
+    "reviewed_on": "2026-11-01",
+    "second_renderer_spot_check": {
+      "library": "Poppler pdftoppm",
+      "pages": [
+        2
+      ],
+      "result": "Text, numerals, and layout agree with the PyMuPDF page render."
+    }
+  }
+}

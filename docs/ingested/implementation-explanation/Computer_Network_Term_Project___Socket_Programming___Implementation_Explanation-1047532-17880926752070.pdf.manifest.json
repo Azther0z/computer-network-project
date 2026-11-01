@@ -1,0 +1,1446 @@
+{
+  "schema_version": 2,
+  "source": {
+    "name": "Computer_Network_Term_Project___Socket_Programming___Implementation_Explanation-1047532-17880926752070.pdf",
+    "sha256": "1c7057d4c5cb2e8143672e067b9c3b7d18f124749a403225b10d1659d6056d7a",
+    "size_bytes": 89557
+  },
+  "languages": [
+    "en"
+  ],
+  "renderer": {
+    "library": "PyMuPDF",
+    "version": "1.28.2",
+    "dpi": 200,
+    "min_text_chars": 24,
+    "page_assets": "assets/pages",
+    "embedded_assets": "assets/embedded"
+  },
+  "page_count": 20,
+  "pages": [
+    {
+      "page": 1,
+      "status": "embedded_text",
+      "agent_review": {
+        "status": "complete",
+        "method": "direct-agent-vision",
+        "artifacts": [
+          "assets/pages/page-0001.png"
+        ],
+        "gaps": [],
+        "reviewed_on": "2026-11-01"
+      },
+      "rotation": 0,
+      "dimensions": {
+        "width": 959.76,
+        "height": 540.0,
+        "unit": "pt"
+      },
+      "embedded_text_chars": 126,
+      "text_blocks": [],
+      "rendered_page": "assets/pages/page-0001.png",
+      "images": [],
+      "drawings": {
+        "count": 1,
+        "items": 1,
+        "bboxes": [
+          {
+            "bbox": [
+              0.0,
+              -0.0,
+              959.76,
+              540.14
+            ],
+            "items": 1,
+            "type": "f"
+          }
+        ]
+      },
+      "visual_candidate": true,
+      "visual_reasons": [
+        "vector_drawings"
+      ]
+    },
+    {
+      "page": 2,
+      "status": "embedded_text",
+      "agent_review": {
+        "status": "complete",
+        "method": "direct-agent-vision",
+        "artifacts": [
+          "assets/pages/page-0002.png"
+        ],
+        "gaps": [],
+        "reviewed_on": "2026-11-01"
+      },
+      "rotation": 0,
+      "dimensions": {
+        "width": 959.76,
+        "height": 540.0,
+        "unit": "pt"
+      },
+      "embedded_text_chars": 106,
+      "text_blocks": [],
+      "rendered_page": "assets/pages/page-0002.png",
+      "images": [],
+      "drawings": {
+        "count": 1,
+        "items": 1,
+        "bboxes": [
+          {
+            "bbox": [
+              0.0,
+              -0.0,
+              959.76,
+              540.14
+            ],
+            "items": 1,
+            "type": "f"
+          }
+        ]
+      },
+      "visual_candidate": true,
+      "visual_reasons": [
+        "vector_drawings"
+      ]
+    },
+    {
+      "page": 3,
+      "status": "embedded_text",
+      "agent_review": {
+        "status": "complete",
+        "method": "direct-agent-vision",
+        "artifacts": [
+          "assets/pages/page-0003.png"
+        ],
+        "gaps": [],
+        "reviewed_on": "2026-11-01"
+      },
+      "rotation": 0,
+      "dimensions": {
+        "width": 959.76,
+        "height": 540.0,
+        "unit": "pt"
+      },
+      "embedded_text_chars": 97,
+      "text_blocks": [],
+      "rendered_page": "assets/pages/page-0003.png",
+      "images": [],
+      "drawings": {
+        "count": 2,
+        "items": 2,
+        "bboxes": [
+          {
+            "bbox": [
+              0.0,
+              -0.0,
+              959.76,
+              540.14
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              66.6,
+              144.4,
+              893.88,
+              395.74
+            ],
+            "items": 1,
+            "type": "s"
+          }
+        ]
+      },
+      "visual_candidate": true,
+      "visual_reasons": [
+        "vector_drawings"
+      ]
+    },
+    {
+      "page": 4,
+      "status": "embedded_text",
+      "agent_review": {
+        "status": "complete",
+        "method": "direct-agent-vision",
+        "artifacts": [
+          "assets/pages/page-0004.png"
+        ],
+        "gaps": [],
+        "reviewed_on": "2026-11-01"
+      },
+      "rotation": 0,
+      "dimensions": {
+        "width": 959.76,
+        "height": 540.0,
+        "unit": "pt"
+      },
+      "embedded_text_chars": 211,
+      "text_blocks": [],
+      "rendered_page": "assets/pages/page-0004.png",
+      "images": [],
+      "drawings": {
+        "count": 1,
+        "items": 1,
+        "bboxes": [
+          {
+            "bbox": [
+              0.0,
+              -0.0,
+              959.76,
+              540.14
+            ],
+            "items": 1,
+            "type": "f"
+          }
+        ]
+      },
+      "visual_candidate": true,
+      "visual_reasons": [
+        "vector_drawings"
+      ]
+    },
+    {
+      "page": 5,
+      "status": "embedded_text",
+      "agent_review": {
+        "status": "complete",
+        "method": "direct-agent-vision",
+        "artifacts": [
+          "assets/pages/page-0005.png"
+        ],
+        "gaps": [],
+        "reviewed_on": "2026-11-01"
+      },
+      "rotation": 0,
+      "dimensions": {
+        "width": 959.76,
+        "height": 540.0,
+        "unit": "pt"
+      },
+      "embedded_text_chars": 198,
+      "text_blocks": [],
+      "rendered_page": "assets/pages/page-0005.png",
+      "images": [],
+      "drawings": {
+        "count": 3,
+        "items": 3,
+        "bboxes": [
+          {
+            "bbox": [
+              0.0,
+              -0.0,
+              959.76,
+              540.14
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              66.6,
+              129.27,
+              893.88,
+              447.59
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              66.6,
+              464.88,
+              893.88,
+              503.05
+            ],
+            "items": 1,
+            "type": "s"
+          }
+        ]
+      },
+      "visual_candidate": true,
+      "visual_reasons": [
+        "vector_drawings"
+      ]
+    },
+    {
+      "page": 6,
+      "status": "embedded_text",
+      "agent_review": {
+        "status": "complete",
+        "method": "direct-agent-vision",
+        "artifacts": [
+          "assets/pages/page-0006.png"
+        ],
+        "gaps": [],
+        "reviewed_on": "2026-11-01"
+      },
+      "rotation": 0,
+      "dimensions": {
+        "width": 959.76,
+        "height": 540.0,
+        "unit": "pt"
+      },
+      "embedded_text_chars": 106,
+      "text_blocks": [],
+      "rendered_page": "assets/pages/page-0006.png",
+      "images": [],
+      "drawings": {
+        "count": 1,
+        "items": 1,
+        "bboxes": [
+          {
+            "bbox": [
+              0.0,
+              -0.0,
+              959.76,
+              540.14
+            ],
+            "items": 1,
+            "type": "f"
+          }
+        ]
+      },
+      "visual_candidate": true,
+      "visual_reasons": [
+        "vector_drawings"
+      ]
+    },
+    {
+      "page": 7,
+      "status": "embedded_text",
+      "agent_review": {
+        "status": "complete",
+        "method": "direct-agent-vision",
+        "artifacts": [
+          "assets/pages/page-0007.png"
+        ],
+        "gaps": [],
+        "reviewed_on": "2026-11-01"
+      },
+      "rotation": 0,
+      "dimensions": {
+        "width": 959.76,
+        "height": 540.0,
+        "unit": "pt"
+      },
+      "embedded_text_chars": 195,
+      "text_blocks": [],
+      "rendered_page": "assets/pages/page-0007.png",
+      "images": [],
+      "drawings": {
+        "count": 5,
+        "items": 5,
+        "bboxes": [
+          {
+            "bbox": [
+              0.0,
+              -0.0,
+              959.76,
+              540.14
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              66.6,
+              158.08,
+              456.84,
+              386.38
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              66.6,
+              418.06,
+              456.84,
+              456.23
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              503.64,
+              155.92,
+              893.88,
+              384.22
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              503.64,
+              414.46,
+              893.88,
+              452.63
+            ],
+            "items": 1,
+            "type": "s"
+          }
+        ]
+      },
+      "visual_candidate": true,
+      "visual_reasons": [
+        "vector_drawings"
+      ]
+    },
+    {
+      "page": 8,
+      "status": "embedded_text",
+      "agent_review": {
+        "status": "complete",
+        "method": "direct-agent-vision",
+        "artifacts": [
+          "assets/pages/page-0008.png"
+        ],
+        "gaps": [],
+        "reviewed_on": "2026-11-01"
+      },
+      "rotation": 0,
+      "dimensions": {
+        "width": 959.76,
+        "height": 540.0,
+        "unit": "pt"
+      },
+      "embedded_text_chars": 275,
+      "text_blocks": [],
+      "rendered_page": "assets/pages/page-0008.png",
+      "images": [],
+      "drawings": {
+        "count": 5,
+        "items": 5,
+        "bboxes": [
+          {
+            "bbox": [
+              0.0,
+              -0.0,
+              959.76,
+              540.14
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              66.6,
+              158.08,
+              456.84,
+              386.38
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              66.6,
+              418.06,
+              456.84,
+              456.23
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              503.64,
+              155.92,
+              893.88,
+              384.22
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              503.64,
+              414.46,
+              893.88,
+              452.63
+            ],
+            "items": 1,
+            "type": "s"
+          }
+        ]
+      },
+      "visual_candidate": true,
+      "visual_reasons": [
+        "vector_drawings"
+      ]
+    },
+    {
+      "page": 9,
+      "status": "embedded_text",
+      "agent_review": {
+        "status": "complete",
+        "method": "direct-agent-vision",
+        "artifacts": [
+          "assets/pages/page-0009.png"
+        ],
+        "gaps": [],
+        "reviewed_on": "2026-11-01"
+      },
+      "rotation": 0,
+      "dimensions": {
+        "width": 959.76,
+        "height": 540.0,
+        "unit": "pt"
+      },
+      "embedded_text_chars": 240,
+      "text_blocks": [],
+      "rendered_page": "assets/pages/page-0009.png",
+      "images": [],
+      "drawings": {
+        "count": 5,
+        "items": 5,
+        "bboxes": [
+          {
+            "bbox": [
+              0.0,
+              -0.0,
+              959.76,
+              540.14
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              66.6,
+              158.08,
+              456.84,
+              386.38
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              66.6,
+              418.06,
+              456.84,
+              456.23
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              503.64,
+              155.92,
+              893.88,
+              384.22
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              503.64,
+              414.46,
+              893.88,
+              452.63
+            ],
+            "items": 1,
+            "type": "s"
+          }
+        ]
+      },
+      "visual_candidate": true,
+      "visual_reasons": [
+        "vector_drawings"
+      ]
+    },
+    {
+      "page": 10,
+      "status": "embedded_text",
+      "agent_review": {
+        "status": "complete",
+        "method": "direct-agent-vision",
+        "artifacts": [
+          "assets/pages/page-0010.png"
+        ],
+        "gaps": [],
+        "reviewed_on": "2026-11-01"
+      },
+      "rotation": 0,
+      "dimensions": {
+        "width": 959.76,
+        "height": 540.0,
+        "unit": "pt"
+      },
+      "embedded_text_chars": 332,
+      "text_blocks": [],
+      "rendered_page": "assets/pages/page-0010.png",
+      "images": [],
+      "drawings": {
+        "count": 5,
+        "items": 5,
+        "bboxes": [
+          {
+            "bbox": [
+              0.0,
+              -0.0,
+              959.76,
+              540.14
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              66.6,
+              158.08,
+              456.84,
+              386.38
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              66.6,
+              418.06,
+              456.84,
+              456.23
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              503.64,
+              155.92,
+              893.88,
+              384.22
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              503.64,
+              414.46,
+              893.88,
+              452.63
+            ],
+            "items": 1,
+            "type": "s"
+          }
+        ]
+      },
+      "visual_candidate": true,
+      "visual_reasons": [
+        "vector_drawings"
+      ]
+    },
+    {
+      "page": 11,
+      "status": "embedded_text",
+      "agent_review": {
+        "status": "complete",
+        "method": "direct-agent-vision",
+        "artifacts": [
+          "assets/pages/page-0011.png"
+        ],
+        "gaps": [],
+        "reviewed_on": "2026-11-01"
+      },
+      "rotation": 0,
+      "dimensions": {
+        "width": 959.76,
+        "height": 540.0,
+        "unit": "pt"
+      },
+      "embedded_text_chars": 280,
+      "text_blocks": [],
+      "rendered_page": "assets/pages/page-0011.png",
+      "images": [],
+      "drawings": {
+        "count": 5,
+        "items": 5,
+        "bboxes": [
+          {
+            "bbox": [
+              0.0,
+              -0.0,
+              959.76,
+              540.14
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              66.6,
+              158.08,
+              456.84,
+              386.38
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              66.6,
+              418.06,
+              456.84,
+              456.23
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              503.64,
+              155.92,
+              893.88,
+              384.22
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              503.64,
+              414.46,
+              893.88,
+              452.63
+            ],
+            "items": 1,
+            "type": "s"
+          }
+        ]
+      },
+      "visual_candidate": true,
+      "visual_reasons": [
+        "vector_drawings"
+      ]
+    },
+    {
+      "page": 12,
+      "status": "embedded_text",
+      "agent_review": {
+        "status": "complete",
+        "method": "direct-agent-vision",
+        "artifacts": [
+          "assets/pages/page-0012.png"
+        ],
+        "gaps": [],
+        "reviewed_on": "2026-11-01"
+      },
+      "rotation": 0,
+      "dimensions": {
+        "width": 959.76,
+        "height": 540.0,
+        "unit": "pt"
+      },
+      "embedded_text_chars": 252,
+      "text_blocks": [],
+      "rendered_page": "assets/pages/page-0012.png",
+      "images": [],
+      "drawings": {
+        "count": 5,
+        "items": 5,
+        "bboxes": [
+          {
+            "bbox": [
+              0.0,
+              -0.0,
+              959.76,
+              540.14
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              66.6,
+              158.08,
+              456.84,
+              386.38
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              66.6,
+              418.06,
+              456.84,
+              456.23
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              503.64,
+              155.92,
+              893.88,
+              384.22
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              503.64,
+              414.46,
+              893.88,
+              452.63
+            ],
+            "items": 1,
+            "type": "s"
+          }
+        ]
+      },
+      "visual_candidate": true,
+      "visual_reasons": [
+        "vector_drawings"
+      ]
+    },
+    {
+      "page": 13,
+      "status": "embedded_text",
+      "agent_review": {
+        "status": "complete",
+        "method": "direct-agent-vision",
+        "artifacts": [
+          "assets/pages/page-0013.png"
+        ],
+        "gaps": [],
+        "reviewed_on": "2026-11-01"
+      },
+      "rotation": 0,
+      "dimensions": {
+        "width": 959.76,
+        "height": 540.0,
+        "unit": "pt"
+      },
+      "embedded_text_chars": 260,
+      "text_blocks": [],
+      "rendered_page": "assets/pages/page-0013.png",
+      "images": [],
+      "drawings": {
+        "count": 5,
+        "items": 5,
+        "bboxes": [
+          {
+            "bbox": [
+              0.0,
+              -0.0,
+              959.76,
+              540.14
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              66.6,
+              158.08,
+              456.84,
+              386.38
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              66.6,
+              418.06,
+              456.84,
+              456.23
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              503.64,
+              155.92,
+              893.88,
+              384.22
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              503.64,
+              414.46,
+              893.88,
+              452.63
+            ],
+            "items": 1,
+            "type": "s"
+          }
+        ]
+      },
+      "visual_candidate": true,
+      "visual_reasons": [
+        "vector_drawings"
+      ]
+    },
+    {
+      "page": 14,
+      "status": "embedded_text",
+      "agent_review": {
+        "status": "complete",
+        "method": "direct-agent-vision",
+        "artifacts": [
+          "assets/pages/page-0014.png"
+        ],
+        "gaps": [],
+        "reviewed_on": "2026-11-01"
+      },
+      "rotation": 0,
+      "dimensions": {
+        "width": 959.76,
+        "height": 540.0,
+        "unit": "pt"
+      },
+      "embedded_text_chars": 274,
+      "text_blocks": [],
+      "rendered_page": "assets/pages/page-0014.png",
+      "images": [],
+      "drawings": {
+        "count": 5,
+        "items": 5,
+        "bboxes": [
+          {
+            "bbox": [
+              0.0,
+              -0.0,
+              959.76,
+              540.14
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              66.6,
+              158.08,
+              456.84,
+              386.38
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              66.6,
+              418.06,
+              456.84,
+              456.23
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              503.64,
+              155.92,
+              893.88,
+              384.22
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              503.64,
+              414.46,
+              893.88,
+              452.63
+            ],
+            "items": 1,
+            "type": "s"
+          }
+        ]
+      },
+      "visual_candidate": true,
+      "visual_reasons": [
+        "vector_drawings"
+      ]
+    },
+    {
+      "page": 15,
+      "status": "embedded_text",
+      "agent_review": {
+        "status": "complete",
+        "method": "direct-agent-vision",
+        "artifacts": [
+          "assets/pages/page-0015.png"
+        ],
+        "gaps": [],
+        "reviewed_on": "2026-11-01"
+      },
+      "rotation": 0,
+      "dimensions": {
+        "width": 959.76,
+        "height": 540.0,
+        "unit": "pt"
+      },
+      "embedded_text_chars": 283,
+      "text_blocks": [],
+      "rendered_page": "assets/pages/page-0015.png",
+      "images": [],
+      "drawings": {
+        "count": 5,
+        "items": 5,
+        "bboxes": [
+          {
+            "bbox": [
+              0.0,
+              -0.0,
+              959.76,
+              540.14
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              66.6,
+              158.08,
+              456.84,
+              386.38
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              66.6,
+              418.06,
+              456.84,
+              456.23
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              503.64,
+              155.92,
+              893.88,
+              384.22
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              503.64,
+              414.46,
+              893.88,
+              452.63
+            ],
+            "items": 1,
+            "type": "s"
+          }
+        ]
+      },
+      "visual_candidate": true,
+      "visual_reasons": [
+        "vector_drawings"
+      ]
+    },
+    {
+      "page": 16,
+      "status": "embedded_text",
+      "agent_review": {
+        "status": "complete",
+        "method": "direct-agent-vision",
+        "artifacts": [
+          "assets/pages/page-0016.png"
+        ],
+        "gaps": [],
+        "reviewed_on": "2026-11-01"
+      },
+      "rotation": 0,
+      "dimensions": {
+        "width": 959.76,
+        "height": 540.0,
+        "unit": "pt"
+      },
+      "embedded_text_chars": 238,
+      "text_blocks": [],
+      "rendered_page": "assets/pages/page-0016.png",
+      "images": [],
+      "drawings": {
+        "count": 1,
+        "items": 1,
+        "bboxes": [
+          {
+            "bbox": [
+              0.0,
+              -0.0,
+              959.76,
+              540.14
+            ],
+            "items": 1,
+            "type": "f"
+          }
+        ]
+      },
+      "visual_candidate": true,
+      "visual_reasons": [
+        "vector_drawings"
+      ]
+    },
+    {
+      "page": 17,
+      "status": "embedded_text",
+      "agent_review": {
+        "status": "complete",
+        "method": "direct-agent-vision",
+        "artifacts": [
+          "assets/pages/page-0017.png"
+        ],
+        "gaps": [],
+        "reviewed_on": "2026-11-01"
+      },
+      "rotation": 0,
+      "dimensions": {
+        "width": 959.76,
+        "height": 540.0,
+        "unit": "pt"
+      },
+      "embedded_text_chars": 255,
+      "text_blocks": [],
+      "rendered_page": "assets/pages/page-0017.png",
+      "images": [],
+      "drawings": {
+        "count": 5,
+        "items": 5,
+        "bboxes": [
+          {
+            "bbox": [
+              0.0,
+              -0.0,
+              959.76,
+              540.14
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              66.6,
+              158.08,
+              456.84,
+              386.38
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              66.6,
+              418.06,
+              456.84,
+              456.23
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              503.64,
+              155.92,
+              893.88,
+              384.22
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              503.64,
+              414.46,
+              893.88,
+              452.63
+            ],
+            "items": 1,
+            "type": "s"
+          }
+        ]
+      },
+      "visual_candidate": true,
+      "visual_reasons": [
+        "vector_drawings"
+      ]
+    },
+    {
+      "page": 18,
+      "status": "embedded_text",
+      "agent_review": {
+        "status": "complete",
+        "method": "direct-agent-vision",
+        "artifacts": [
+          "assets/pages/page-0018.png"
+        ],
+        "gaps": [],
+        "reviewed_on": "2026-11-01"
+      },
+      "rotation": 0,
+      "dimensions": {
+        "width": 959.76,
+        "height": 540.0,
+        "unit": "pt"
+      },
+      "embedded_text_chars": 187,
+      "text_blocks": [],
+      "rendered_page": "assets/pages/page-0018.png",
+      "images": [],
+      "drawings": {
+        "count": 5,
+        "items": 5,
+        "bboxes": [
+          {
+            "bbox": [
+              0.0,
+              -0.0,
+              959.76,
+              540.14
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              66.6,
+              158.08,
+              456.84,
+              386.38
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              66.6,
+              418.06,
+              456.84,
+              456.23
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              503.64,
+              155.92,
+              893.88,
+              384.22
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              503.64,
+              414.46,
+              893.88,
+              452.63
+            ],
+            "items": 1,
+            "type": "s"
+          }
+        ]
+      },
+      "visual_candidate": true,
+      "visual_reasons": [
+        "vector_drawings"
+      ]
+    },
+    {
+      "page": 19,
+      "status": "embedded_text",
+      "agent_review": {
+        "status": "complete",
+        "method": "direct-agent-vision",
+        "artifacts": [
+          "assets/pages/page-0019.png"
+        ],
+        "gaps": [],
+        "reviewed_on": "2026-11-01"
+      },
+      "rotation": 0,
+      "dimensions": {
+        "width": 959.76,
+        "height": 540.0,
+        "unit": "pt"
+      },
+      "embedded_text_chars": 187,
+      "text_blocks": [],
+      "rendered_page": "assets/pages/page-0019.png",
+      "images": [],
+      "drawings": {
+        "count": 5,
+        "items": 5,
+        "bboxes": [
+          {
+            "bbox": [
+              0.0,
+              -0.0,
+              959.76,
+              540.14
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              66.6,
+              158.08,
+              456.84,
+              386.38
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              66.6,
+              418.06,
+              456.84,
+              456.23
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              503.64,
+              155.92,
+              893.88,
+              384.22
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              503.64,
+              414.46,
+              893.88,
+              452.63
+            ],
+            "items": 1,
+            "type": "s"
+          }
+        ]
+      },
+      "visual_candidate": true,
+      "visual_reasons": [
+        "vector_drawings"
+      ]
+    },
+    {
+      "page": 20,
+      "status": "embedded_text",
+      "agent_review": {
+        "status": "complete",
+        "method": "direct-agent-vision",
+        "artifacts": [
+          "assets/pages/page-0020.png"
+        ],
+        "gaps": [],
+        "reviewed_on": "2026-11-01"
+      },
+      "rotation": 0,
+      "dimensions": {
+        "width": 959.76,
+        "height": 540.0,
+        "unit": "pt"
+      },
+      "embedded_text_chars": 187,
+      "text_blocks": [],
+      "rendered_page": "assets/pages/page-0020.png",
+      "images": [],
+      "drawings": {
+        "count": 5,
+        "items": 5,
+        "bboxes": [
+          {
+            "bbox": [
+              0.0,
+              -0.0,
+              959.76,
+              540.14
+            ],
+            "items": 1,
+            "type": "f"
+          },
+          {
+            "bbox": [
+              66.6,
+              158.08,
+              456.84,
+              386.38
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              66.6,
+              418.06,
+              456.84,
+              456.23
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              503.64,
+              155.92,
+              893.88,
+              384.22
+            ],
+            "items": 1,
+            "type": "s"
+          },
+          {
+            "bbox": [
+              503.64,
+              414.46,
+              893.88,
+              452.63
+            ],
+            "items": 1,
+            "type": "s"
+          }
+        ]
+      },
+      "visual_candidate": true,
+      "visual_reasons": [
+        "vector_drawings"
+      ]
+    }
+  ],
+  "errors": [],
+  "review_summary": {
+    "status": "complete",
+    "pages_reviewed": 20,
+    "gaps": [],
+    "reviewed_on": "2026-11-01",
+    "second_renderer_spot_check": {
+      "library": "Poppler pdftoppm",
+      "pages": [
+        17
+      ],
+      "result": "Text, numerals, and layout agree with the PyMuPDF page render."
+    }
+  }
+}
