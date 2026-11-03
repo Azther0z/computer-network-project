@@ -2,6 +2,8 @@
 
 This is the team’s implementation plan for the mandatory chat application. It gives Guitar and Poom clear ownership while ensuring that both write backend code. Saint owns the AI emoji-effect special feature after R1–R11 are complete. Cloud deployment and other optional features remain out of scope until then.
 
+Follow the ordered [core implementation checklist](core-implementation-checklist.md) for the prerequisite work before special features.
+
 ## Current design decision: full accounts
 
 The team chose full account registration and sign-in rather than the earlier browser-held resume-token approach.
