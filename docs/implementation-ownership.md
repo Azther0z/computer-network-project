@@ -1,6 +1,6 @@
 # Core implementation ownership plan
 
-This is the team’s implementation plan for the mandatory chat application. It gives two developers clear ownership while ensuring that both write backend code. It excludes the AI feature, cloud deployment, tomato reactions and typing indicators until R1–R11 are complete.
+This is the team’s implementation plan for the mandatory chat application. It gives Guitar and Poom clear ownership while ensuring that both write backend code. Saint owns the AI emoji-effect special feature after R1–R11 are complete. Cloud deployment and other optional features remain out of scope until then.
 
 ## Current design decision: full accounts
 
@@ -28,9 +28,9 @@ Both developers own the system contract together.
 7. Block chat commands from unauthenticated or disconnected sockets. Do not automatically retry writes.
 8. Every feature needs a test or repeatable manual demonstration and a requirement ID when applicable.
 
-## Person A — accounts, authentication and presence
+## Guitar — accounts, authentication and presence
 
-Person A owns the question: **who is this socket connected as, and who is currently online?**
+Guitar owns the question: **who is this socket connected as, and who is currently online?**
 
 ### Backend ownership
 
@@ -73,9 +73,9 @@ Person A owns the question: **who is this socket connected as, and who is curren
 
 Primary: R3 (unique client name) and R4 (online client list). This work also supplies the authentication boundary used by every other requirement.
 
-## Person B — rooms, memberships and messages
+## Poom — rooms, memberships and messages
 
-Person B owns the question: **what may the authenticated user see and do in a chat room?**
+Poom owns the question: **what may the authenticated user see and do in a chat room?**
 
 ### Backend ownership
 
@@ -92,7 +92,7 @@ Person B owns the question: **what may the authenticated user see and do in a ch
   - Store the first-join visibility boundary.
   - A repeated join must not move that boundary.
 - Implement `room.send`.
-  - Obtain sender identity from Person A’s authenticated socket binding.
+  - Obtain sender identity from Guitar’s authenticated socket binding.
   - Check persisted membership before saving.
   - Save the message before acknowledgement/broadcast.
   - Deduplicate a manual retry by `(senderId, clientMessageId)`.
@@ -123,26 +123,93 @@ Person B owns the question: **what may the authenticated user see and do in a ch
 
 ### Requirement contribution
 
-Primary: R5–R11. Person B’s handlers rely on Person A’s authentication guard; authentication never grants room access by itself.
+Primary: R5–R11. Poom’s handlers rely on Guitar’s authentication guard; authentication never grants room access by itself.
+
+## Saint — AI emoji firework
+
+Saint owns the AI special feature: a user selects a message, then AI chooses one emoji from a controlled set (about 20 approved emojis) and displays it as a firework effect, inspired by chat-message effects.
+
+This feature is implemented only after the R1–R11 core chat flow passes. It is not a replacement for normal message delivery, room membership checks or persistent history.
+
+### Chosen feature flow
+
+1. A user selects an existing message and chooses **AI emoji effect**.
+2. The browser asks the backend to analyze that one selected message.
+3. The backend verifies the requester may read that message using persisted room membership and the group join-history boundary.
+4. The backend sends only the selected message text and the fixed emoji allow-list to the AI provider. It must not send unrelated room history, passwords, credentials, resume/session data or user-private metadata.
+5. The AI returns one emoji from the allow-list. The backend validates the response against that allow-list before returning it.
+6. The requesting client displays that emoji as a short, local firework animation over the selected message. The initial scope does not persist or broadcast the animation as a reaction; it is a visual result for the requester.
+
+If the AI provider fails, times out or returns an invalid emoji, show a recoverable error and do not invent an AI result. Keep a documented deterministic fallback only if the team explicitly chooses one; do not present that fallback as an AI decision.
+
+### Backend ownership
+
+- Define a fixed emoji allow-list of roughly 20 emojis in server configuration or a shared type.
+- Define an authenticated request such as `message.emojiSuggest` with `{roomId, messageId}`; the browser must not submit another user’s identity or arbitrary room text as authority.
+- Reuse Poom’s persisted authorization/history-visibility query before analyzing the selected message.
+- Add an AI service module that sends only the allowed message text and emoji list to the selected provider/model.
+- Require a constrained, machine-readable response containing exactly one allowed emoji; validate it server-side.
+- Return a success/failure acknowledgement without exposing provider credentials, prompts containing sensitive values or raw provider errors.
+- Add tests for nonmember/pre-join rejection, malformed AI output, provider failure and allow-list validation.
+
+### Frontend ownership
+
+- Add an accessible **AI emoji effect** action to each message the current user is allowed to view.
+- Show loading state while the AI chooses the emoji and an error/retry state when it fails.
+- Render the returned allowed emoji as a short firework animation anchored to that message.
+- Respect reduced-motion preferences: use a still emoji or non-animated result when the user requests reduced motion.
+- Do not make the animation look like a saved normal reaction in the first version.
+
+### Done when
+
+1. An authorized user selects a visible message and receives one allowed emoji selected by the AI.
+2. The emoji is displayed as a short firework effect for that requester.
+3. A nonmember and a user who cannot see a pre-join group message cannot invoke the feature on it.
+4. Invalid AI output and provider failures show a safe error without leaking data.
+5. The presentation records the provider/model, prompt design, code evidence and AI prompts as required by the template.
+
+### Requirement contribution
+
+This is the required AI special feature for Part 3. It needs instructor/demo evidence but is not an R1–R11 requirement.
+
+## Shared special feature — typing indicator
+
+Typing indicators are the other selected special feature. Guitar owns the transient backend/presence behavior; Poom owns the conversation UI. Implement it after the core chat is working.
+
+```text
+Alex begins typing in Room A
+→ client emits typing.set for Room A
+→ server verifies Alex is a current member of Room A
+→ server emits “Alex is typing…” only to the other connected Room A members
+→ status clears on send, empty draft, room switch, disconnect, explicit stop, or expiry
+```
+
+- Never persist typing state in SQLite or include draft text.
+- Never expose a typing state outside the relevant private/group room.
+- Throttle active updates and expire a missed stop signal after a short timeout.
+- Ensure a nonmember cannot set or receive typing for the room.
+
+The account creation/sign-in work is part of Guitar’s core ownership. It may be presented as an additional feature, but the team should confirm with the instructor whether it earns a special-feature point because unique identity overlaps R3.
 
 ## Required shared integration milestones
 
-| Milestone | Person A delivers | Person B delivers | Joint proof |
+| Milestone | Guitar delivers | Poom delivers | Joint proof |
 | --- | --- | --- | --- |
 | Project skeleton | Socket.IO connection and account schema | Room/message schema and chat-screen shell | Browser reaches one backend process |
 | Account baseline | Register, login, authenticated socket, online list | UI can receive an authenticated current user | Alice and Bob sign in and see each other |
 | Private chat | Guarded socket identity and presence | Private room, send, history and UI | Alice sends Bob a private message; Charlie cannot see it |
 | Group chat | Group-directory presence/member snapshots | Create, preview, join, group send/history and UI | Bob self-joins Alice’s group; Charlie remains excluded |
 | Persistence/demo | Sign-out/disconnect/sign-in behavior | Persisted room/history authorization | Restart/reopen/sign-in preserves authorized data |
+| AI feature | Authenticated caller identity | Reusable message-visibility query | Saint returns an allowed AI-selected emoji and shows its effect |
 
 ## Build order
 
 1. Work together to reconcile the documentation and create `frontend/`, `backend/`, shared types, Socket.IO setup and SQLite connection.
-2. Person A implements account registration/login and the online-user list. Person B builds the chat layout with temporary sample data and begins room schema/query code.
+2. Guitar implements account registration/login and the online-user list. Poom builds the chat layout with temporary sample data and begins room schema/query code.
 3. Integrate the first vertical slice: two authenticated users open a private room and exchange persisted messages.
-4. Person B adds groups, self-join and group history boundaries. Person A completes presence/disconnect/sign-out behavior and the group-directory events needed by the UI.
+4. Poom adds groups, self-join and group history boundaries. Guitar completes presence/disconnect/sign-out behavior and the group-directory events needed by the UI.
 5. Test with three users and two physical computers. Capture code and runtime evidence for R1–R11.
-6. Only after the core requirements pass, add the AI special feature, reactions/typing and optional deployment.
+6. After the core requirements pass, Guitar/Poom add room-scoped typing, and Saint adds the AI emoji firework. Guitar and Poom expose the authenticated identity and persisted message-visibility checks Saint needs. Optional deployment comes afterward.
 
 ## Demonstration checklist
 
@@ -154,4 +221,6 @@ Primary: R5–R11. Person B’s handlers rely on Person A’s authentication gua
 - Group nonmembers cannot read or send.
 - A new group member cannot read pre-join history.
 - Close browser/sign out, sign in again, and recover the account’s authorized rooms/history.
+- An authorized user receives an AI-selected emoji effect for a selected visible message; blocked users cannot analyze inaccessible messages.
+- Typing status appears only to other eligible members of the active room and disappears reliably.
 - Code and presentation evidence identifies R1–R11.

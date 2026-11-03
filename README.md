@@ -11,7 +11,7 @@ A tomato-themed browser chat application for the Computer Networks term project.
 - Create groups, view members, and choose which groups to join.
 - Group messages are visible only to members.
 - Sign in to restore the same identity, group memberships and saved chat history.
-- Planned extras: tomato reactions, typing indicators, AI and cloud deployment.
+- Planned extras: typing indicators and an AI-selected emoji firework; cloud deployment remains optional.
 
 ## Stack
 
@@ -49,6 +49,6 @@ README.md
 AGENTS.md
 ```
 
-**Status:** Design stage; the application is not implemented yet. AI details and cloud hosting are not selected.
+**Status:** Design stage; the application is not implemented yet. The AI emoji-firework feature is selected; cloud hosting is not.
 
 See the [implementation ownership plan](docs/implementation-ownership.md), [requirements](docs/requirements.md), [architecture](docs/architecture.md) and [UI design](docs/ui-ux.md).
