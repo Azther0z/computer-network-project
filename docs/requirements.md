@@ -32,7 +32,7 @@ Each requirement below is a paraphrase. Use the original PDFs for exact wording.
 
 Part 3 allows four special features at one point each. The template reserves its first special-feature slide for AI.
 The assignment gives speech-to-text, summarization, sentiment analysis, and a chatbot as examples. These examples are not selected features.
-The team has not selected special features or decided whether to use cloud deployment.
+The planned Part 3 slots are AI (details provisional), cloud deployment (provider pending), tomato message reactions and room-scoped typing indicators. The Talkmato Figma exports depict AI Voice Chat, but that specific AI behavior is not selected. See [UI design](ui-ux.md) for the current source screens and design boundaries. These are planned features, not completed implementation or guaranteed grading decisions.
 
 | Template pages | Evidence to prepare |
 | --- | --- |
@@ -52,5 +52,6 @@ The final presentation is not created yet. Keep the supplied PDF template unchan
 
 The supplied PDFs do not state a deadline, submission channel, or presentation duration.
 They do not select a language, user interface, message format, AI model, or service provider.
-They list Socket.IO and WebSocket learning resources while requiring socket programming for chat messages. Confirm any proposed framework against R2 before implementation.
-Do not treat passwords, persistence, group-leaving behavior, or end-to-end encryption as assignment requirements without further evidence.
+The project selects Next.js with TypeScript and Node.js with TypeScript and Socket.IO; see the [architecture](architecture.md) and [proposed event protocol](websocket-protocol.md). These are project decisions, not source requirements.
+The PDFs list Socket.IO and WebSocket learning resources while requiring socket programming for chat messages. The project interprets direct browser-to-Node Socket.IO chat over WebSocket-only transport as satisfying R2; demonstrate the send/receive code and actual transport. Any additional instructor restrictions would take precedence.
+Persistence and session resume are selected project enhancements, not additional assignment requirements. See the [reconnect and history design](architecture.md#selected-lifecycle-and-storage-baseline). Do not treat passwords, explicit group-leaving behavior or end-to-end encryption as assignment requirements without further evidence.

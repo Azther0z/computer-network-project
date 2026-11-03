@@ -1,0 +1,125 @@
+<div id="chat-wireframe">
+  <div class="preview-controls"><label for="chat-scenario">Preview state</label><select id="chat-scenario"><option value="workspace">Workspace</option><option value="entry">Sign in</option><option value="duplicate">Name conflict</option><option value="rejected">Rejected message</option><option value="disconnected">Connection lost</option></select><span>Interactive wireframe · sample data</span></div>
+  <div class="product">
+    <header><div><strong>Common room</strong><span class="subtitle">Simple chat application</span></div><span id="chat-status" role="status">Connected as Alice</span></header>
+    <section id="chat-entry" hidden>
+      <form id="chat-signin"><h2>Join the conversation</h2><p>Choose a name for this session.</p><label for="chat-name">Display name</label><input id="chat-name" autocomplete="off" value="Alice" required><p id="chat-name-error" role="alert" hidden>This name is already online. Choose another name.</p><button class="primary" type="submit">Connect and join</button></form>
+    </section>
+    <div id="chat-workspace">
+      <div id="chat-offline" role="alert" hidden><span>Disconnected. Sign in again to start a new session.</span><button id="chat-reconnect" type="button">Reconnect and sign in</button></div>
+      <div class="workspace">
+        <aside aria-label="People, groups and conversations">
+          <h3>Online people</h3><div id="chat-people"></div>
+          <div class="section-head"><h3>All groups</h3><button id="chat-new" type="button">Create group</button></div>
+          <form id="chat-create" hidden><label for="chat-group-name">Group name</label><input id="chat-group-name" required maxlength="64"><p>Initially, only you will be a member.</p><div class="actions"><button class="primary" type="submit">Create</button><button id="chat-cancel" type="button">Cancel</button></div><p id="chat-group-error" role="alert" hidden>Enter a group name.</p></form>
+          <div id="chat-groups"></div>
+          <h3>Your conversations</h3><div id="chat-rooms"></div>
+        </aside>
+        <main>
+          <div class="room-heading"><h2 id="chat-room-title">Bob</h2><p id="chat-room-meta">Private · Alice and Bob</p></div>
+          <div id="chat-preview" hidden><p id="chat-preview-text">Join this group to send and receive new messages.</p><button id="chat-join" class="primary" type="button">Join group</button></div>
+          <div id="chat-messages" role="log" aria-label="Messages" aria-live="polite"></div>
+          <p id="chat-feedback" role="status" aria-live="polite"></p>
+          <form id="chat-composer"><label for="chat-text">Message</label><div class="compose-row"><input id="chat-text" autocomplete="off" placeholder="Write a message…"><button id="chat-send" class="primary" type="submit">Send</button></div><p>Messages stay in this session only.</p></form>
+        </main>
+      </div>
+    </div>
+  </div>
+</div>
+<style>
+#chat-wireframe {--chat-bg:light-dark(#ffffff,#161d28);--chat-text:light-dark(#20324b,#e4ecf6);--chat-muted:light-dark(#54647b,#b3c1d4);--chat-line:light-dark(#d9e2ed,#354359);--chat-soft:light-dark(#f1f5fa,#202e40);--chat-action:light-dark(#244e73,#a9cfee);--chat-on-action:light-dark(#ffffff,#162537);--chat-error:light-dark(#a12626,#ffb2b2);color:var(--chat-text);font:15px/1.5 Arial,sans-serif;max-width:1100px;margin:auto}
+#chat-wireframe * {box-sizing:border-box}
+#chat-wireframe [hidden] {display:none!important}
+#chat-wireframe .preview-controls {display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;padding-right:90px}
+#chat-wireframe .preview-controls span {color:var(--chat-muted);font-size:13px}
+#chat-wireframe .product {background:var(--chat-bg);border:1px solid var(--chat-line);border-radius:8px;overflow:hidden}
+#chat-wireframe header {display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;padding:20px 24px;border-bottom:1px solid var(--chat-line)}
+#chat-wireframe strong {font-weight:600}
+#chat-wireframe .subtitle {display:block;color:var(--chat-muted);font-size:13px}
+#chat-wireframe #chat-status {font-size:13px}
+#chat-wireframe .workspace {display:grid;grid-template-columns:minmax(230px,30%) minmax(0,1fr)}
+#chat-wireframe aside {padding:20px;border-right:1px solid var(--chat-line);background:var(--chat-soft)}
+#chat-wireframe main {padding:24px;min-width:0;display:flex;flex-direction:column;gap:16px}
+#chat-wireframe h2 {font-size:22px;font-weight:500;margin:0}
+#chat-wireframe h3 {font-size:14px;font-weight:600;margin:18px 0 8px}
+#chat-wireframe aside>h3:first-child {margin-top:0}
+#chat-wireframe p {margin:4px 0;color:var(--chat-muted);overflow-wrap:anywhere}
+#chat-wireframe button,#chat-wireframe select,#chat-wireframe input {font:inherit;color:var(--chat-text);background:var(--chat-bg);border:1px solid var(--chat-line);border-radius:5px;padding:9px 12px;max-width:100%}
+#chat-wireframe button {cursor:inherit;white-space:normal}
+#chat-wireframe button:disabled {opacity:.5;cursor:default}
+#chat-wireframe button.primary {background:var(--chat-action);color:var(--chat-on-action);border-color:var(--chat-action)}
+#chat-wireframe button[aria-pressed=true] {background:var(--chat-bg);border-color:var(--chat-action)}
+#chat-wireframe .item {display:flex;width:100%;text-align:left;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px;overflow-wrap:anywhere;min-width:0}
+#chat-wireframe .item small {display:block;color:var(--chat-muted);font-size:12px}
+#chat-wireframe .item>span {min-width:0}
+#chat-wireframe .section-head {display:flex;align-items:center;justify-content:space-between;gap:8px;margin:18px 0 8px}
+#chat-wireframe .section-head h3 {margin:0}
+#chat-wireframe .section-head button {font-size:12px;padding:6px 8px}
+#chat-wireframe .room-heading {border-bottom:1px solid var(--chat-line);padding-bottom:14px}
+#chat-wireframe #chat-messages {min-height:200px;display:flex;flex-direction:column;align-items:flex-start;gap:12px}
+#chat-wireframe .message {padding:10px 14px;background:var(--chat-soft);border-radius:5px;max-width:90%;overflow-wrap:anywhere}
+#chat-wireframe .message.mine {align-self:flex-end}
+#chat-wireframe .message small {color:var(--chat-muted);display:block;font-size:12px}
+#chat-wireframe .compose-row {display:flex;gap:10px}
+#chat-wireframe .compose-row input {flex:1;min-width:0}
+#chat-wireframe label {display:block;margin-bottom:6px}
+#chat-wireframe #chat-composer>p,#chat-wireframe #chat-create p {font-size:12px}
+#chat-wireframe #chat-create {margin:12px 0;padding-bottom:12px;border-bottom:1px solid var(--chat-line)}
+#chat-wireframe .actions {display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+#chat-wireframe #chat-entry {padding:48px 24px}
+#chat-wireframe #chat-signin {max-width:360px;margin:auto;display:grid;gap:12px}
+#chat-wireframe #chat-signin label {margin:0}
+#chat-wireframe #chat-name-error,#chat-wireframe #chat-group-error {color:var(--chat-error)}
+#chat-wireframe #chat-offline {padding:14px 20px;background:var(--chat-soft);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+#chat-wireframe #chat-preview {padding:20px 0}
+#chat-wireframe #chat-preview button {margin-top:12px}
+@media(max-width:650px){#chat-wireframe .workspace{grid-template-columns:1fr}#chat-wireframe aside{border-right:0;border-bottom:1px solid var(--chat-line)}#chat-wireframe main{padding:18px}#chat-wireframe .preview-controls{padding-right:0}#chat-wireframe input{font-size:16px}}
+@media(pointer:coarse){#chat-wireframe button,#chat-wireframe input,#chat-wireframe select{min-height:44px}}
+</style>
+<script>
+(() => {
+  const root=document.getElementById('chat-wireframe');
+  const el=id=>root.querySelector('#chat-'+id);
+  let scenario='workspace',self='Alice',active='p-bob',groups=[],messages={},drafts={},feedback='',serial=0;
+  const peers=['Bob','Charlie'];
+  const esc=text=>String(text).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  function seed(fresh=false){groups=[{id:'g-study',name:'Study',members:['Bob','Charlie']}];messages=fresh?{}:{'p-bob':[{sender:'Bob',text:'Hi Alice. Ready for the network project?',time:'10:30'}]};drafts={};active=fresh?'': 'p-bob';feedback='';}
+  function remember(){if(window.openai?.setWidgetState)window.openai.setWidgetState({modelContent:{screen:scenario,selectedRoom:active},privateContent:{scenario,active}}).catch(()=>{});}
+  function row(label,detail,id,disabled=false){return '<button type="button" class="item" data-room="'+esc(id)+'" aria-pressed="'+String(active===id)+'"'+(disabled?' disabled':'')+'><span>'+esc(label)+'<small>'+esc(detail)+'</small></span></button>';}
+  function render(){
+    const entry=['entry','duplicate'].includes(scenario),offline=scenario==='disconnected';
+    el('scenario').value=scenario;el('entry').hidden=!entry;el('workspace').hidden=entry;el('offline').hidden=!offline;
+    el('status').textContent=entry?'Not signed in':offline?'Disconnected': 'Connected as '+self;
+    el('name-error').hidden=scenario!=='duplicate';
+    el('people').innerHTML=row(self+' (You)','Your current session','self',true)+peers.map(p=>row(p,'Online','p-'+p.toLowerCase(),offline)).join('');
+    el('groups').innerHTML=groups.map(g=>row(g.name,g.id+' · '+g.members.join(', ')+(g.members.includes(self)?' · Joined':''),g.id,offline)).join('');
+    const privateIds=Object.keys(messages).filter(id=>id.startsWith('p-'));
+    el('rooms').innerHTML=privateIds.map(id=>row(id.slice(2).replace(/^./,c=>c.toUpperCase()),'Private',id,offline)).join('')+groups.filter(g=>g.members.includes(self)).map(g=>row(g.name,'Group',g.id,offline)).join('');
+    if(!el('rooms').children.length)el('rooms').textContent='No conversations yet.';
+    const group=groups.find(g=>g.id===active),member=group?.members.includes(self),preview=!!group&&!member;
+    el('room-title').textContent=group?group.name:active?active.slice(2).replace(/^./,c=>c.toUpperCase()):'Start a conversation';
+    el('room-meta').textContent=group?'Group · '+group.members.join(', '):active?'Private · '+self+' and '+el('room-title').textContent:'Choose an online person or explore a group.';
+    el('preview').hidden=!preview;el('join').disabled=offline;el('composer').hidden=preview||!active;el('messages').hidden=preview;
+    const visible=messages[active]||[];
+    el('messages').innerHTML=preview?'':visible.map(m=>'<div class="message '+(m.sender===self?'mine':'')+'"><small>'+esc(m.sender===self?'You':m.sender)+' · '+esc(m.time)+'</small><div>'+esc(m.text)+'</div></div>').join('')||'<p>'+(active?'No messages yet.':'Choose a person to start a private chat, or select a group.')+'</p>';
+    el('text').value=drafts[active]||'';el('text').disabled=offline;el('send').disabled=offline||!active||!el('text').value.trim();el('new').disabled=offline;
+    el('feedback').textContent=feedback;el('feedback').hidden=!feedback;
+    for(const b of el('create').querySelectorAll('button,input'))b.disabled=offline;
+  }
+  root.addEventListener('click',e=>{const b=e.target.closest('[data-room]');if(!b||b.disabled)return;active=b.dataset.room;if(active.startsWith('p-')&&!messages[active])messages[active]=[];feedback='';render();remember();});
+  el('scenario').addEventListener('change',()=>{scenario=el('scenario').value;self='Alice';seed();el('create').hidden=true;if(scenario==='rejected'){drafts['p-bob']='Can we meet at 3?';feedback='Message was not accepted. Edit your message and send again.';}render();remember();});
+  el('text').addEventListener('input',()=>{drafts[active]=el('text').value;el('send').disabled=scenario==='disconnected'||!el('text').value.trim();});
+  el('text').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.isComposing)e.preventDefault();});
+  el('composer').addEventListener('submit',e=>{e.preventDefault();const text=el('text').value;if(e.isComposing||scenario==='disconnected'||!text.trim()||!active)return;if(Array.from(text).length>4000){feedback='Message is too long. Use 4,000 characters or fewer.';render();return;}(messages[active]??=[]).push({sender:self,text,time:'Accepted'});drafts[active]='';feedback='';scenario='workspace';render();remember();el('text').focus();});
+  el('join').addEventListener('click',()=>{if(scenario==='disconnected')return;const g=groups.find(g=>g.id===active);if(g&&!g.members.includes(self)){g.members.push(self);messages[g.id]=[];}feedback='You joined. Earlier messages are not available.';render();remember();});
+  el('new').addEventListener('click',()=>{el('create').hidden=false;el('group-name').focus();});
+  el('cancel').addEventListener('click',()=>{el('create').hidden=true;el('new').focus();});
+  el('create').addEventListener('submit',e=>{e.preventDefault();if(scenario==='disconnected')return;const name=el('group-name').value.trim();el('group-error').hidden=!!name;if(!name)return;const g={id:'g-new-'+(++serial),name,members:[self]};groups.push(g);messages[g.id]=[];active=g.id;el('group-name').value='';el('create').hidden=true;feedback='Group created. You are its only member.';render();remember();});
+  el('reconnect').addEventListener('click',()=>{scenario='entry';seed(true);el('create').hidden=true;render();remember();el('name').focus();});
+  el('signin').addEventListener('submit',e=>{e.preventDefault();const name=el('name').value.trim().normalize('NFC');if(!name||Array.from(name).length>32||/[\u0000-\u001f\u007f]/.test(name)){el('name-error').textContent='Use a name of 1–32 characters without control characters.';el('name-error').hidden=false;return;}if(peers.some(p=>p.toLowerCase()===name.toLowerCase())||(scenario==='duplicate'&&name.toLowerCase()==='alice')){el('name-error').textContent='This name is already online. Choose another name.';el('name-error').hidden=false;el('name').focus();return;}self=name;scenario='workspace';seed(true);render();remember();});
+  const saved=window.openai?.widgetState?.privateContent;
+  if(saved&&['workspace','entry','duplicate','rejected','disconnected'].includes(saved.scenario))scenario=saved.scenario;
+  seed();if(scenario==='rejected'){drafts['p-bob']='Can we meet at 3?';feedback='Message was not accepted. Edit your message and send again.';}render();
+  window.addEventListener('openai:set_globals',e=>{const s=e.detail?.globals?.widgetState?.privateContent;if(s&&['workspace','entry','duplicate','rejected','disconnected'].includes(s.scenario)){scenario=s.scenario;seed();if(s.active==='p-bob'||s.active==='g-study')active=s.active;render();}});
+})();
+</script>

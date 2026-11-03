@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1130" viewBox="0 0 1600 1130" role="img" aria-labelledby="title description">
+  <title id="title">Talkmato — System Architecture</title>
+  <desc id="description">Two physical browser clients load the Next.js UI and connect directly to one Node.js Socket.IO backend over WebSocket. Application logic authenticates session resume, authorizes room access and commits saved messages before acknowledgement. Runtime memory holds connections, presence and typing. Proposed SQLite on persistent storage holds users, sessions, rooms, memberships, messages and reactions across restart. AI remains a provisional extension of application logic.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#244e73"/></marker>
+    <marker id="optional-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#67778a"/></marker>
+    <style>
+      text {font-family: Arial, Helvetica, sans-serif; fill: #19334d;}
+      .title {font-size: 34px; font-weight: 700;}
+      .layer {font-size: 23px; font-weight: 700; letter-spacing: 1px;}
+      .heading {font-size: 27px; font-weight: 700;}
+      .body {font-size: 24px;}
+      .small {font-size: 22px; fill: #45586d;}
+      .label {font-size: 23px; font-weight: 600;}
+      .boundary {stroke: #bccbd9; stroke-width: 2;}
+      .component {fill: #ffffff; stroke: #557794; stroke-width: 2;}
+      .flow {fill: none; stroke: #244e73; stroke-width: 3; marker-end: url(#arrow);}
+      .both {marker-start: url(#arrow);}
+    </style>
+  </defs>
+  <rect width="1600" height="1130" fill="#ffffff"/>
+  <text x="40" y="48" class="title">Talkmato — System Architecture</text>
+  <text x="1560" y="48" text-anchor="end" class="small">Socket Programming · Planned design</text>
+
+  <rect x="40" y="85" width="1520" height="215" rx="4" fill="#edf4fa" class="boundary"/>
+  <text x="65" y="120" class="layer">CLIENT LAYER</text>
+  <text x="1535" y="120" text-anchor="end" class="small">Two separate physical computers</text>
+  <rect x="100" y="150" width="540" height="120" rx="3" class="component"/>
+  <text x="370" y="192" text-anchor="middle" class="heading">Client A · Physical Computer A</text>
+  <text x="370" y="235" text-anchor="middle" class="body">Browser with Next.js UI</text>
+  <rect x="960" y="150" width="540" height="120" rx="3" class="component"/>
+  <text x="1230" y="192" text-anchor="middle" class="heading">Client B · Physical Computer B</text>
+  <text x="1230" y="235" text-anchor="middle" class="body">Browser with Next.js UI</text>
+
+  <rect x="490" y="335" width="620" height="185" rx="4" fill="#f3f5f7" class="boundary"/>
+  <text x="800" y="380" text-anchor="middle" class="layer">WEB APPLICATION LAYER</text>
+  <rect x="580" y="395" width="440" height="95" rx="3" class="component"/>
+  <text x="800" y="432" text-anchor="middle" class="heading">Next.js Server</text>
+  <text x="800" y="469" text-anchor="middle" class="body">Serves the web UI</text>
+  <path d="M 550 270 V 440 H 580" class="flow both"/>
+  <path d="M 1050 270 V 440 H 1020" class="flow both"/>
+  <rect x="405" y="305" width="290" height="55" fill="#ffffff"/>
+  <text x="550" y="325" text-anchor="middle" class="label">HTTP/HTTPS</text>
+  <text x="550" y="351" text-anchor="middle" class="small">Request &amp; Serve Web UI</text>
+  <rect x="905" y="305" width="290" height="55" fill="#ffffff"/>
+  <text x="1050" y="325" text-anchor="middle" class="label">HTTP/HTTPS</text>
+  <text x="1050" y="351" text-anchor="middle" class="small">Request &amp; Serve Web UI</text>
+
+  <rect x="40" y="555" width="1520" height="520" rx="4" fill="#edf4fa" class="boundary"/>
+  <text x="280" y="590" class="layer">CHAT SERVER LAYER</text>
+  <text x="1100" y="590" text-anchor="middle" class="small">One shared Node.js Socket.IO instance</text>
+  <rect x="140" y="625" width="1320" height="75" rx="3" class="component"/>
+  <text x="800" y="655" text-anchor="middle" class="heading">Socket.IO Endpoint (/socket.io/)</text>
+  <text x="800" y="685" text-anchor="middle" class="small">Named events · Acknowledgements · Room delivery</text>
+
+  <path d="M 230 270 V 625" class="flow both"/>
+  <path d="M 1370 270 V 625" class="flow both"/>
+  <rect x="55" y="432" width="350" height="76" fill="#ffffff"/>
+  <text x="230" y="459" text-anchor="middle" class="label">WebSocket — ws:// or wss://</text>
+  <text x="230" y="491" text-anchor="middle" class="body">Socket.IO Events · JSON</text>
+  <rect x="1195" y="432" width="350" height="76" fill="#ffffff"/>
+  <text x="1370" y="459" text-anchor="middle" class="label">WebSocket — ws:// or wss://</text>
+  <text x="1370" y="491" text-anchor="middle" class="body">Socket.IO Events · JSON</text>
+  <text x="800" y="545" text-anchor="middle" class="small">Connection setup: HTTP Upgrade → WebSocket → Socket.IO Connection</text>
+
+  <path d="M 800 700 V 755" class="flow both"/>
+  <text x="825" y="735" class="small">Dispatch events / Return results</text>
+  <rect x="140" y="755" width="1320" height="155" rx="3" class="component"/>
+  <text x="170" y="789" class="heading">Chat Application Logic</text>
+  <g fill="#edf4fa" stroke="#bccbd9" stroke-width="1.5">
+    <rect x="165" y="805" width="615" height="40" rx="2"/>
+    <rect x="800" y="805" width="635" height="40" rx="2"/>
+    <rect x="165" y="855" width="615" height="40" rx="2"/>
+    <rect x="800" y="855" width="635" height="40" rx="2"/>
+  </g>
+  <text x="472" y="833" text-anchor="middle" class="body">Connection &amp; User Management</text>
+  <text x="1117" y="833" text-anchor="middle" class="body">Room &amp; Group Management</text>
+  <text x="472" y="883" text-anchor="middle" class="body">Message Routing</text>
+  <text x="1117" y="883" text-anchor="middle" class="body">Membership Validation &amp; Authorization</text>
+
+  <path d="M 365 910 V 960" class="flow both"/>
+  <text x="390" y="942" class="small">Live state</text>
+  <rect x="140" y="960" width="450" height="95" rx="3" class="component"/>
+  <text x="160" y="989" class="heading">Runtime Memory</text>
+  <text x="160" y="1018" class="small">Connections · Presence · Typing</text>
+  <text x="160" y="1044" class="small">Rebuilt after reconnect / restart</text>
+
+  <path d="M 865 910 V 960" class="flow both"/>
+  <text x="890" y="942" class="small">Commit / Read</text>
+  <rect x="615" y="960" width="525" height="95" rx="3" class="component"/>
+  <text x="635" y="989" class="heading">Persistent Storage</text>
+  <text x="635" y="1018" class="small">Users · Sessions · Rooms · Memberships</text>
+  <text x="635" y="1044" class="small">Messages · Reactions · SQLite proposed</text>
+
+  <path d="M 1325 910 V 960" fill="none" stroke="#67778a" stroke-width="2.5" stroke-dasharray="7 6" marker-start="url(#optional-arrow)" marker-end="url(#optional-arrow)"/>
+  <text x="1305" y="942" text-anchor="end" class="small">Authorized input / Result</text>
+  <rect x="1190" y="960" width="270" height="95" rx="3" fill="#ffffff" stroke="#67778a" stroke-width="2" stroke-dasharray="7 6"/>
+  <text x="1325" y="987" text-anchor="middle" class="label">AI Integration</text>
+  <text x="1325" y="1014" text-anchor="middle" class="small">(add details later)</text>
+  <text x="1325" y="1041" text-anchor="middle" class="small">e.g. chat summarization</text>
+
+  <text x="40" y="1105" class="small">JSON = message data format · ws:// = no TLS · wss:// = TLS · Chat traffic bypasses Next.js Server.</text>
+</svg>
