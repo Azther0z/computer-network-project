@@ -17,7 +17,7 @@ A tomato-themed browser chat application for the Computer Networks term project.
 
 | Part | Technology |
 | --- | --- |
-| Frontend | Next.js + TypeScript |
+| Frontend | Next.js (React) + TypeScript |
 | Backend | Node.js + TypeScript + Socket.IO |
 | Communication | Socket.IO events over WebSocket, with JSON payloads |
 | Runtime | One backend process; live connections and typing in memory |
