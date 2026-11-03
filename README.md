@@ -30,7 +30,7 @@ Browsers connect directly to the backend. History survives reconnect and refresh
 Planned layout; `frontend/` and `backend/` are not created yet.
 
 ```text
-frontend/                 # Next.js UI
+frontend/                 # Next.js (React) UI
   app/                    # Pages, layout and styles
   components/             # Sign-in, sidebar and chat room
   hooks/useChat.ts        # Socket.IO connection and UI state
