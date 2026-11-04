@@ -6,6 +6,12 @@
   background: #fff8ee;
 }
 
+.previewPage {
+  min-height: 100vh;
+  padding: 24px;
+  background: #fff8ee;
+}
+
 .main {
   width: min(100%, 640px);
   padding: 56px;
