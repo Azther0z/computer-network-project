@@ -3,6 +3,16 @@
 .env.*
 !.env.example
 
+# Generated JavaScript artifacts
+node_modules/
+.next/
+dist/
+
+# Local SQLite development data
+backend/data/*.sqlite
+backend/data/*.sqlite-wal
+backend/data/*.sqlite-shm
+
 # Local editor and operating system files
 .DS_Store
 Thumbs.db
