@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 
 import { Server } from 'socket.io';
 
+import { registerRoomHandlers } from './room-handlers.js';
 import { Storage } from './storage.js';
 
 const port = Number(process.env.PORT ?? 8080);
@@ -30,7 +31,7 @@ const io = new Server(httpServer, {
 
 io.on('connection', (socket) => {
   // Guitar adds auth.register/auth.login and binds socket.data.actor here.
-  // Poom's future room handlers must require that authenticated actor.
+  registerRoomHandlers(socket, io, storage);
   socket.on('disconnect', () => {
     // Guitar owns presence cleanup. Poom owns durable room/message state only.
   });

@@ -42,6 +42,7 @@ export class DomainError extends Error {
   constructor(
     public readonly code:
       | 'ROOM_NOT_FOUND'
+      | 'WRONG_ROOM_TYPE'
       | 'NOT_MEMBER'
       | 'USER_NOT_FOUND'
       | 'CLIENT_MESSAGE_ID_CONFLICT',
