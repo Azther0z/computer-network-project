@@ -1,0 +1,401 @@
+import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
+
+import { DomainError, type MembershipRecord, type MessageRecord, type RoomRecord, type UserRecord } from './types.js';
+
+const schemaPath = new URL('./schema.sql', import.meta.url);
+const schemaSql = readFileSync(schemaPath, 'utf8');
+
+type UserRow = {
+  user_id: string;
+  name: string;
+  canonical_name: string;
+  password_hash: string;
+  created_at: string;
+};
+
+type RoomRow = {
+  room_id: string;
+  kind: 'private' | 'group';
+  name: string | null;
+  private_pair_key: string | null;
+  created_at: string;
+};
+
+type MembershipRow = {
+  room_id: string;
+  user_id: string;
+  visible_from_seq: number;
+  joined_at: string;
+};
+
+type MessageRow = {
+  seq: number;
+  message_id: string;
+  room_id: string;
+  sender_id: string;
+  client_message_id: string;
+  text: string;
+  sent_at: string;
+};
+
+function now(): string {
+  return new Date().toISOString();
+}
+
+function canonicalPrivatePairKey(firstUserId: string, secondUserId: string): string {
+  return [firstUserId, secondUserId].sort().join(':');
+}
+
+function asUser(row: UserRow): UserRecord {
+  return {
+    userId: row.user_id,
+    name: row.name,
+    canonicalName: row.canonical_name,
+    passwordHash: row.password_hash,
+    createdAt: row.created_at,
+  };
+}
+
+function asRoom(row: RoomRow): RoomRecord {
+  return {
+    roomId: row.room_id,
+    kind: row.kind,
+    name: row.name,
+    privatePairKey: row.private_pair_key,
+    createdAt: row.created_at,
+  };
+}
+
+function asMembership(row: MembershipRow): MembershipRecord {
+  return {
+    roomId: row.room_id,
+    userId: row.user_id,
+    visibleFromSeq: row.visible_from_seq,
+    joinedAt: row.joined_at,
+  };
+}
+
+function asMessage(row: MessageRow): MessageRecord {
+  return {
+    seq: row.seq,
+    messageId: row.message_id,
+    roomId: row.room_id,
+    senderId: row.sender_id,
+    clientMessageId: row.client_message_id,
+    text: row.text,
+    sentAt: row.sent_at,
+  };
+}
+
+export class Storage {
+  readonly database: DatabaseSync;
+
+  constructor(databasePath: string) {
+    this.database = new DatabaseSync(databasePath, {
+      enableForeignKeyConstraints: true,
+      timeout: 5_000,
+    });
+    this.database.exec(schemaSql);
+  }
+
+  close(): void {
+    this.database.close();
+  }
+
+  createUser(input: {
+    userId?: string;
+    name: string;
+    canonicalName: string;
+    passwordHash: string;
+  }): UserRecord {
+    const user: UserRecord = {
+      userId: input.userId ?? randomUUID(),
+      name: input.name,
+      canonicalName: input.canonicalName,
+      passwordHash: input.passwordHash,
+      createdAt: now(),
+    };
+
+    this.database
+      .prepare(
+        `INSERT INTO users (user_id, name, canonical_name, password_hash, created_at)
+         VALUES (:userId, :name, :canonicalName, :passwordHash, :createdAt)`,
+      )
+      .run({
+        userId: user.userId,
+        name: user.name,
+        canonicalName: user.canonicalName,
+        passwordHash: user.passwordHash,
+        createdAt: user.createdAt,
+      });
+
+    return user;
+  }
+
+  findOrCreatePrivateRoom(actorId: string, peerId: string): RoomRecord {
+    this.requireUser(actorId);
+    this.requireUser(peerId);
+
+    const pairKey = canonicalPrivatePairKey(actorId, peerId);
+    const existing = this.database
+      .prepare('SELECT * FROM rooms WHERE private_pair_key = ?')
+      .get(pairKey) as RoomRow | undefined;
+
+    if (existing) {
+      return asRoom(existing);
+    }
+
+    const room: RoomRecord = {
+      roomId: randomUUID(),
+      kind: 'private',
+      name: null,
+      privatePairKey: pairKey,
+      createdAt: now(),
+    };
+
+    this.inTransaction(() => {
+      this.database
+        .prepare(
+          `INSERT INTO rooms (room_id, kind, name, private_pair_key, created_at)
+           VALUES (:roomId, :kind, :name, :privatePairKey, :createdAt)`,
+        )
+        .run({
+          roomId: room.roomId,
+          kind: room.kind,
+          name: room.name,
+          privatePairKey: room.privatePairKey,
+          createdAt: room.createdAt,
+        });
+      this.insertMembership(room.roomId, actorId, 0);
+      this.insertMembership(room.roomId, peerId, 0);
+    });
+
+    return room;
+  }
+
+  createGroup(creatorId: string, name: string): RoomRecord {
+    this.requireUser(creatorId);
+
+    const room: RoomRecord = {
+      roomId: randomUUID(),
+      kind: 'group',
+      name,
+      privatePairKey: null,
+      createdAt: now(),
+    };
+
+    this.inTransaction(() => {
+      this.database
+        .prepare(
+          `INSERT INTO rooms (room_id, kind, name, private_pair_key, created_at)
+           VALUES (:roomId, :kind, :name, :privatePairKey, :createdAt)`,
+        )
+        .run({
+          roomId: room.roomId,
+          kind: room.kind,
+          name: room.name,
+          privatePairKey: room.privatePairKey,
+          createdAt: room.createdAt,
+        });
+      this.insertMembership(room.roomId, creatorId, 0);
+    });
+
+    return room;
+  }
+
+  joinGroup(userId: string, roomId: string): MembershipRecord {
+    this.requireUser(userId);
+    const room = this.requireRoom(roomId);
+
+    if (room.kind !== 'group') {
+      throw new DomainError('ROOM_NOT_FOUND', 'Only groups can be joined.');
+    }
+
+    const existing = this.findMembership(roomId, userId);
+    if (existing) {
+      return existing;
+    }
+
+    let membership: MembershipRecord | undefined;
+    this.inTransaction(() => {
+      const current = this.findMembership(roomId, userId);
+      if (current) {
+        membership = current;
+        return;
+      }
+
+      const maximum = this.database
+        .prepare('SELECT COALESCE(MAX(seq), 0) AS maximum_seq FROM messages')
+        .get() as { maximum_seq: number };
+      membership = this.insertMembership(roomId, userId, maximum.maximum_seq + 1);
+    });
+
+    return membership!;
+  }
+
+  sendMessage(input: {
+    senderId: string;
+    roomId: string;
+    clientMessageId: string;
+    text: string;
+  }): { message: MessageRecord; replayed: boolean } {
+    this.requireMembership(input.roomId, input.senderId);
+
+    const existing = this.database
+      .prepare('SELECT * FROM messages WHERE sender_id = ? AND client_message_id = ?')
+      .get(input.senderId, input.clientMessageId) as MessageRow | undefined;
+
+    if (existing) {
+      if (existing.room_id === input.roomId && existing.text === input.text) {
+        return { message: asMessage(existing), replayed: true };
+      }
+      throw new DomainError(
+        'CLIENT_MESSAGE_ID_CONFLICT',
+        'This client message ID was already used for different content.',
+      );
+    }
+
+    const message = this.inTransaction(() => {
+      const record = {
+        messageId: randomUUID(),
+        roomId: input.roomId,
+        senderId: input.senderId,
+        clientMessageId: input.clientMessageId,
+        text: input.text,
+        sentAt: now(),
+      };
+
+      const result = this.database
+        .prepare(
+          `INSERT INTO messages (message_id, room_id, sender_id, client_message_id, text, sent_at)
+           VALUES (:messageId, :roomId, :senderId, :clientMessageId, :text, :sentAt)`,
+        )
+        .run(record);
+      const row = this.database
+        .prepare('SELECT * FROM messages WHERE seq = ?')
+        .get(Number(result.lastInsertRowid)) as MessageRow;
+      return asMessage(row);
+    });
+
+    return { message, replayed: false };
+  }
+
+  loadHistory(input: { actorId: string; roomId: string; beforeSeq?: number; limit?: number }): {
+    messages: MessageRecord[];
+    nextBeforeSeq: number | null;
+    highWatermarkSeq: number;
+  } {
+    const membership = this.requireMembership(input.roomId, input.actorId);
+    const room = this.requireRoom(input.roomId);
+    const limit = Math.min(Math.max(input.limit ?? 50, 1), 100);
+    const upperBound = input.beforeSeq ?? Number.MAX_SAFE_INTEGER;
+    const minimum = room.kind === 'group' ? membership.visibleFromSeq : 0;
+
+    const rows = this.database
+      .prepare(
+        `SELECT * FROM messages
+         WHERE room_id = :roomId AND seq >= :minimum AND seq < :upperBound
+         ORDER BY seq DESC LIMIT :limit`,
+      )
+      .all({ roomId: input.roomId, minimum, upperBound, limit }) as MessageRow[];
+    const messages = rows.reverse().map(asMessage);
+    const oldest = messages[0]?.seq;
+    const hasOlder =
+      oldest !== undefined &&
+      (this.database
+        .prepare(
+          `SELECT 1 FROM messages
+           WHERE room_id = :roomId AND seq >= :minimum AND seq < :oldest LIMIT 1`,
+        )
+        .get({ roomId: input.roomId, minimum, oldest }) as { 1: number } | undefined) !== undefined;
+    const highWatermark = this.database
+      .prepare(
+        `SELECT COALESCE(MAX(seq), 0) AS maximum_seq
+         FROM messages WHERE room_id = :roomId AND seq >= :minimum`,
+      )
+      .get({ roomId: input.roomId, minimum }) as { maximum_seq: number };
+
+    return {
+      messages,
+      nextBeforeSeq: hasOlder && oldest !== undefined ? oldest : null,
+      highWatermarkSeq: highWatermark.maximum_seq,
+    };
+  }
+
+  isMessageVisibleTo(userId: string, roomId: string, messageId: string): boolean {
+    const membership = this.findMembership(roomId, userId);
+    const room = this.database.prepare('SELECT * FROM rooms WHERE room_id = ?').get(roomId) as RoomRow | undefined;
+    const message = this.database
+      .prepare('SELECT * FROM messages WHERE room_id = ? AND message_id = ?')
+      .get(roomId, messageId) as MessageRow | undefined;
+
+    return Boolean(
+      membership &&
+        room &&
+        message &&
+        (room.kind === 'private' || message.seq >= membership.visibleFromSeq),
+    );
+  }
+
+  private requireUser(userId: string): UserRecord {
+    const row = this.database.prepare('SELECT * FROM users WHERE user_id = ?').get(userId) as UserRow | undefined;
+    if (!row) {
+      throw new DomainError('USER_NOT_FOUND', 'User was not found.');
+    }
+    return asUser(row);
+  }
+
+  private requireRoom(roomId: string): RoomRecord {
+    const row = this.database.prepare('SELECT * FROM rooms WHERE room_id = ?').get(roomId) as RoomRow | undefined;
+    if (!row) {
+      throw new DomainError('ROOM_NOT_FOUND', 'Room was not found.');
+    }
+    return asRoom(row);
+  }
+
+  private findMembership(roomId: string, userId: string): MembershipRecord | undefined {
+    const row = this.database
+      .prepare('SELECT * FROM memberships WHERE room_id = ? AND user_id = ?')
+      .get(roomId, userId) as MembershipRow | undefined;
+    return row ? asMembership(row) : undefined;
+  }
+
+  private requireMembership(roomId: string, userId: string): MembershipRecord {
+    this.requireRoom(roomId);
+    const membership = this.findMembership(roomId, userId);
+    if (!membership) {
+      throw new DomainError('NOT_MEMBER', 'Join the group before accessing its messages.');
+    }
+    return membership;
+  }
+
+  private insertMembership(roomId: string, userId: string, visibleFromSeq: number): MembershipRecord {
+    const membership: MembershipRecord = { roomId, userId, visibleFromSeq, joinedAt: now() };
+    this.database
+      .prepare(
+        `INSERT INTO memberships (room_id, user_id, visible_from_seq, joined_at)
+         VALUES (:roomId, :userId, :visibleFromSeq, :joinedAt)`,
+      )
+      .run({
+        roomId: membership.roomId,
+        userId: membership.userId,
+        visibleFromSeq: membership.visibleFromSeq,
+        joinedAt: membership.joinedAt,
+      });
+    return membership;
+  }
+
+  private inTransaction<T>(work: () => T): T {
+    this.database.exec('BEGIN IMMEDIATE');
+    try {
+      const value = work();
+      this.database.exec('COMMIT');
+      return value;
+    } catch (error) {
+      this.database.exec('ROLLBACK');
+      throw error;
+    }
+  }
+}
