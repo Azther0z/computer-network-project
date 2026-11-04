@@ -1,0 +1,318 @@
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(210px, 280px) minmax(0, 1fr);
+  min-height: min(720px, 100vh - 48px);
+  overflow: hidden;
+  border: 1px solid #efe4d5;
+  border-radius: 24px;
+  background: #ffffff;
+  box-shadow: 0 20px 70px rgb(41 39 37 / 12%);
+}
+
+.previewNotice {
+  grid-column: 1 / -1;
+  padding: 10px 20px;
+  color: #695e52;
+  background: #fff0df;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.sidebar {
+  display: grid;
+  align-content: start;
+  gap: 30px;
+  padding: 24px 16px;
+  background: #fff8ee;
+}
+
+.brand {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 0 8px;
+  color: #292725;
+  font-size: 1.2rem;
+}
+
+.brand span,
+.tomato {
+  color: #e7473f;
+}
+
+.sidebar h2,
+.sectionHeading h2 {
+  color: #81766a;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sectionHeading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0 8px 8px;
+}
+
+.sectionHeading button {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  color: #ffffff;
+  background: #e7473f;
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.userList,
+.roomList,
+.messages {
+  padding: 0;
+  margin: 8px 0 0;
+  list-style: none;
+}
+
+.personButton,
+.roomList button {
+  display: flex;
+  width: 100%;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 8px;
+  border: 0;
+  border-radius: 10px;
+  color: #403b36;
+  background: transparent;
+  text-align: left;
+}
+
+.personButton:enabled:hover,
+.roomList button:hover,
+.activeRoom {
+  background: #f5e6d7 !important;
+}
+
+.personButton:disabled {
+  color: #81766a;
+}
+
+.personButton small {
+  margin-left: auto;
+  color: #81766a;
+}
+
+.onlineDot,
+.offlineDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #79a66a;
+}
+
+.offlineDot {
+  background: #b8b0a7;
+}
+
+.conversation {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-width: 0;
+}
+
+.emptyState,
+.groupPreview {
+  display: grid;
+  place-content: center;
+  gap: 12px;
+  min-height: 100%;
+  padding: 36px;
+  text-align: center;
+}
+
+.emptyState h1,
+.groupPreview h2,
+.modal h2 {
+  color: #292725;
+}
+
+.emptyState p,
+.groupPreview p,
+.modal p {
+  color: #695e52;
+  line-height: 1.5;
+}
+
+.tomato {
+  font-size: 3rem;
+}
+
+.roomHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 22px 28px;
+  border-bottom: 1px solid #efe4d5;
+}
+
+.roomHeader p,
+.roomHeader span {
+  color: #81766a;
+  font-size: 0.9rem;
+}
+
+.roomHeader h1 {
+  margin-top: 4px;
+  color: #292725;
+  font-size: 1.25rem;
+}
+
+.messages {
+  display: grid;
+  align-content: end;
+  gap: 14px;
+  min-height: 0;
+  padding: 28px;
+  overflow-y: auto;
+}
+
+.receivedMessage,
+.ownMessage {
+  max-width: min(75%, 520px);
+  padding: 12px 14px;
+  border-radius: 16px;
+  color: #292725;
+  background: #f5f1ec;
+}
+
+.ownMessage {
+  justify-self: end;
+  color: #ffffff;
+  background: #e7473f;
+}
+
+.receivedMessage strong {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 0.82rem;
+}
+
+.receivedMessage p,
+.ownMessage p {
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.receivedMessage time,
+.ownMessage time {
+  display: block;
+  margin-top: 6px;
+  color: inherit;
+  font-size: 0.72rem;
+  opacity: 0.7;
+}
+
+.noMessages {
+  justify-self: center;
+  color: #81766a;
+}
+
+.composer {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  padding: 18px 28px;
+  border-top: 1px solid #efe4d5;
+}
+
+.composer textarea,
+.modal input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ded2c4;
+  border-radius: 12px;
+  color: #292725;
+  font: inherit;
+  resize: vertical;
+}
+
+.composer button,
+.groupPreview button,
+.modalActions button:last-child {
+  align-self: end;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 12px;
+  color: #ffffff;
+  background: #e7473f;
+  font: inherit;
+  font-weight: 700;
+}
+
+.composer button:disabled,
+.groupPreview button:disabled,
+.modalActions button:disabled {
+  opacity: 0.55;
+}
+
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(41 39 37 / 45%);
+}
+
+.modal {
+  display: grid;
+  width: min(100%, 420px);
+  gap: 14px;
+  padding: 28px;
+  border-radius: 18px;
+  background: #ffffff;
+}
+
+.modal label {
+  color: #403b36;
+  font-weight: 700;
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.modalActions button {
+  min-height: 42px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 10px;
+  color: #403b36;
+  background: #f5f1ec;
+  font: inherit;
+}
+
+@media (max-width: 720px) {
+  .workspace {
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+
+  .sidebar {
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+
+  .brand {
+    grid-column: 1 / -1;
+  }
+
+  .conversation {
+    min-height: 620px;
+  }
+}
