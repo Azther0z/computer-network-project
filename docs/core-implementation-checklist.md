@@ -2,17 +2,17 @@
 
 Complete this checklist in order before starting the AI emoji effect, typing indicator, animations or deployment. It converts the course requirements and the team’s account-login decision into the minimum build sequence.
 
-## 0. Reconcile the design documents
+## 0. Confirm the design baseline
 
-The team chose account registration/sign-in, but older design documents still describe `session.resume`. Before coding, update the architecture, protocol, data model, event examples and UI flow together.
+The architecture, protocol, data model, event examples and UI flow now use account registration/sign-in. Confirm the baseline together before coding, and keep every document synchronized when it changes.
 
 Agree on:
 
 - Authentication events: `auth.register`, `auth.login` and `auth.logout`.
-- No resume-token feature.
+- No resume-token feature or browser-held password.
 - A new Socket.IO connection requires registration or sign-in before chat commands.
 - Whether one account can sign in from one or multiple browsers at a time.
-- Password and message validation rules.
+- Password and message validation rules: passwords are 8–128 characters and the backend stores Argon2id hashes only.
 - Shared TypeScript DTOs and acknowledgement/error shapes.
 
 ## 1. Create separate frontend and backend applications

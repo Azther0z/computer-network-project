@@ -15,18 +15,18 @@ The team chose full account registration and sign-in rather than the earlier bro
 - Browser closure/disconnect clears only live connection, presence and typing state. It does not delete the account, rooms, memberships or messages.
 - The initial scope has no email, password reset, social login, cross-device session persistence or recovery flow.
 
-This supersedes the authentication lifecycle in the existing `docs/architecture.md`, `docs/data-model.md`, `docs/websocket-protocol.md`, `docs/websocket-examples.md` and `docs/ui-ux.md`. Before implementation begins, both developers must reconcile those documents with this decision. Do not implement both `session.resume` and password login unless the team deliberately later adds a session mechanism.
+The architecture, data model, protocol, examples and UI flow use this same account-login baseline. Do not implement `session.resume` or a browser-held resume token. Do not add a session mechanism later unless the team deliberately revisits this decision.
 
 ## Shared rules
 
 Both developers own the system contract together.
 
 1. Read `docs/requirements.md`, this document, and the architecture/protocol/data-model documents before coding.
-2. Update the architecture, data model, protocol, examples and UI flow together before changing application code. Replace `user.register`/`session.resume` authentication semantics with `auth.register`/`auth.login`.
+2. Keep architecture, data model, protocol, examples and UI flow synchronized when changing account/authentication behavior. The current events are `auth.register`/`auth.login`/`auth.logout`.
 3. Keep one Node.js/Socket.IO backend process. Browsers connect directly with `socket.io-client` using WebSocket-only transport; Next.js does not relay chat.
 4. Treat the authenticated user bound to a socket as the authority. Never trust client-provided sender IDs, user IDs, membership claims or room permissions.
 5. Save every durable mutation before acknowledging it or broadcasting it.
-6. Store only password hashes; use a vetted password-hashing library. Do not log, return, put in URLs, or commit passwords.
+6. Store only Argon2id password hashes through a vetted backend library. Do not log, return, put in URLs, or commit passwords.
 7. Block chat commands from unauthenticated or disconnected sockets. Do not automatically retry writes.
 8. Every feature needs a test or repeatable manual demonstration and a requirement ID when applicable.
 

@@ -32,7 +32,7 @@ Each requirement below is a paraphrase. Use the original PDFs for exact wording.
 
 Part 3 allows four special features at one point each. The template reserves its first special-feature slide for AI.
 The assignment gives speech-to-text, summarization, sentiment analysis, and a chatbot as examples. These examples are not selected features.
-The planned Part 3 slots are AI (details provisional), cloud deployment (provider pending), tomato message reactions and room-scoped typing indicators. The Talkmato Figma exports depict AI Voice Chat, but that specific AI behavior is not selected. See [UI design](ui-ux.md) for the current source screens and design boundaries. These are planned features, not completed implementation or guaranteed grading decisions.
+The selected Part 3 directions are Saint's AI-selected emoji firework, room-scoped typing indicators, and persistent account creation/sign-in. A fourth feature is unselected; cloud deployment remains optional. Confirm with the instructor whether account creation/sign-in earns a separate special-feature point because it overlaps R3. The Figma exports depict AI Voice Chat and tomato reactions, but neither is selected. See [UI design](ui-ux.md) for current behavior. These are planned features, not completed implementation or guaranteed grading decisions.
 
 | Template pages | Evidence to prepare |
 | --- | --- |
