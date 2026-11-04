@@ -139,12 +139,10 @@ export class Storage {
     this.requireUser(peerId);
 
     const pairKey = canonicalPrivatePairKey(actorId, peerId);
-    const existing = this.database
-      .prepare('SELECT * FROM rooms WHERE private_pair_key = ?')
-      .get(pairKey) as RoomRow | undefined;
+    const existing = this.findPrivateRoom(actorId, peerId);
 
     if (existing) {
-      return asRoom(existing);
+      return existing;
     }
 
     const room: RoomRecord = {
@@ -173,6 +171,34 @@ export class Storage {
     });
 
     return room;
+  }
+
+  findPrivateRoom(firstUserId: string, secondUserId: string): RoomRecord | undefined {
+    const row = this.database
+      .prepare('SELECT * FROM rooms WHERE private_pair_key = ?')
+      .get(canonicalPrivatePairKey(firstUserId, secondUserId)) as RoomRow | undefined;
+    return row ? asRoom(row) : undefined;
+  }
+
+  getUser(userId: string): UserRecord | undefined {
+    const row = this.database.prepare('SELECT * FROM users WHERE user_id = ?').get(userId) as UserRow | undefined;
+    return row ? asUser(row) : undefined;
+  }
+
+  getRoom(roomId: string): RoomRecord | undefined {
+    const row = this.database.prepare('SELECT * FROM rooms WHERE room_id = ?').get(roomId) as RoomRow | undefined;
+    return row ? asRoom(row) : undefined;
+  }
+
+  getRoomMembers(roomId: string): UserRecord[] {
+    const rows = this.database
+      .prepare(
+        `SELECT u.* FROM users AS u
+         INNER JOIN memberships AS m ON m.user_id = u.user_id
+         WHERE m.room_id = ? ORDER BY m.joined_at ASC, u.user_id ASC`,
+      )
+      .all(roomId) as UserRow[];
+    return rows.map(asUser);
   }
 
   createGroup(creatorId: string, name: string): RoomRecord {
@@ -210,7 +236,7 @@ export class Storage {
     const room = this.requireRoom(roomId);
 
     if (room.kind !== 'group') {
-      throw new DomainError('ROOM_NOT_FOUND', 'Only groups can be joined.');
+      throw new DomainError('WRONG_ROOM_TYPE', 'Only groups can be joined.');
     }
 
     const existing = this.findMembership(roomId, userId);
@@ -340,19 +366,19 @@ export class Storage {
   }
 
   private requireUser(userId: string): UserRecord {
-    const row = this.database.prepare('SELECT * FROM users WHERE user_id = ?').get(userId) as UserRow | undefined;
-    if (!row) {
+    const user = this.getUser(userId);
+    if (!user) {
       throw new DomainError('USER_NOT_FOUND', 'User was not found.');
     }
-    return asUser(row);
+    return user;
   }
 
   private requireRoom(roomId: string): RoomRecord {
-    const row = this.database.prepare('SELECT * FROM rooms WHERE room_id = ?').get(roomId) as RoomRow | undefined;
-    if (!row) {
+    const room = this.getRoom(roomId);
+    if (!room) {
       throw new DomainError('ROOM_NOT_FOUND', 'Room was not found.');
     }
-    return asRoom(row);
+    return room;
   }
 
   private findMembership(roomId: string, userId: string): MembershipRecord | undefined {
