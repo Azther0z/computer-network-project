@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { Server } from 'socket.io';
 
 import { registerRoomHandlers } from './room-handlers.js';
+import { AuthPresence } from './auth-handlers.js';
 import { Storage } from './storage.js';
 
 const port = Number(process.env.PORT ?? 8080);
@@ -29,11 +30,12 @@ const io = new Server(httpServer, {
   allowRequest: (request, accept) => accept(null, request.headers.origin === frontendOrigin),
 });
 
+const auth = new AuthPresence(io, storage);
 io.on('connection', (socket) => {
-  // Guitar adds auth.register/auth.login and binds socket.data.actor here.
-  registerRoomHandlers(socket, io, storage);
-  socket.on('disconnect', () => {
-    // Guitar owns presence cleanup. Poom owns durable room/message state only.
+  auth.register(socket);
+  registerRoomHandlers(socket, io, storage, {
+    isOnline: auth.isOnline,
+    toPublicUser: auth.toPublicUser,
   });
 });
 
