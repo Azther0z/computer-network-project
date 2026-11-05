@@ -69,11 +69,19 @@ type PublicUser = { userId: string; name: string; online: boolean };
 type RoomHandlerDependencies = {
   isOnline(userId: string): boolean;
   toPublicUser(user: UserRecord): PublicUser;
+  joinUserToRoom(userId: string, roomId: string): void;
+  emitToUser(userId: string, event: string, payload: unknown): void;
+  broadcastDirectories(): void;
+  clearTyping(userId: string, roomId: string): void;
 };
 
 const defaultDependencies: RoomHandlerDependencies = {
   isOnline: () => false,
   toPublicUser: (user) => ({ userId: user.userId, name: user.name, online: false }),
+  joinUserToRoom: () => {},
+  emitToUser: () => {},
+  broadcastDirectories: () => {},
+  clearTyping: () => {},
 };
 
 function asMessage(message: MessageRecord, senderName: string) {
@@ -85,7 +93,8 @@ function asRoom(storage: Storage, room: RoomRecord, dependencies: RoomHandlerDep
     roomId: room.roomId,
     kind: room.kind,
     ...(room.name === null ? {} : { name: room.name }),
-    members: storage.getRoomMembers(room.roomId).map(dependencies.toPublicUser),
+    members: (room.kind === 'private' ? storage.getPrivateRoomMembers(room.roomId) : storage.getRoomMembers(room.roomId))
+      .map(dependencies.toPublicUser),
   };
 }
 
@@ -139,9 +148,19 @@ export function registerRoomHandlers(
       if (!existing && !dependencies.isOnline(peerId)) {
         throw new RequestError('USER_OFFLINE', 'This user is currently offline.');
       }
+      const created = existing === undefined;
       const room = existing ?? storage.findOrCreatePrivateRoom(actor.userId, peerId);
+      const publicRoom = asRoom(storage, room, dependencies);
+      // Delivery channels are caches only. Put both live private members into the
+      // new room after its persisted memberships have committed.
       void socket.join(roomChannel(room.roomId));
-      return { room: asRoom(storage, room, dependencies) };
+      dependencies.joinUserToRoom(actor.userId, room.roomId);
+      dependencies.joinUserToRoom(peerId, room.roomId);
+      if (created) {
+        dependencies.emitToUser(actor.userId, 'private.opened', { room: publicRoom });
+        dependencies.emitToUser(peerId, 'private.opened', { room: publicRoom });
+      }
+      return { room: publicRoom };
     });
   });
 
@@ -156,7 +175,9 @@ export function registerRoomHandlers(
 
       const group = storage.createGroup(actor.userId, name);
       void socket.join(roomChannel(group.roomId));
-      return { group: asRoom(storage, group, dependencies) };
+      const publicGroup = asRoom(storage, group, dependencies);
+      dependencies.broadcastDirectories();
+      return { group: publicGroup };
     });
   });
 
@@ -171,7 +192,9 @@ export function registerRoomHandlers(
         throw new DomainError('ROOM_NOT_FOUND', 'Room was not found.');
       }
       void socket.join(roomChannel(roomId));
-      return { group: asRoom(storage, room, dependencies) };
+      const publicGroup = asRoom(storage, room, dependencies);
+      dependencies.broadcastDirectories();
+      return { group: publicGroup };
     });
   });
 
@@ -188,6 +211,7 @@ export function registerRoomHandlers(
 
       const result = storage.sendMessage({ senderId: actor.userId, roomId, clientMessageId, text });
       const message = asMessage(result.message, actor.name);
+      dependencies.clearTyping(actor.userId, roomId);
       if (!result.replayed) {
         io.to(roomChannel(roomId)).emit('message.created', message);
       }
@@ -212,7 +236,7 @@ export function registerRoomHandlers(
         roomId,
         messages: page.messages.map((message) => {
           const sender = storage.getUser(message.senderId);
-          return asMessage(message, sender?.name ?? 'Unknown');
+          return asMessage(message, sender?.name ?? '<Unknown>');
         }),
         nextBeforeSeq: page.nextBeforeSeq,
         highWatermarkSeq: page.highWatermarkSeq,

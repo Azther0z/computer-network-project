@@ -100,3 +100,16 @@ test('manual retry returns the existing message without inserting another row', 
     (error: unknown) => error instanceof DomainError && error.code === 'CLIENT_MESSAGE_ID_CONFLICT',
   );
 });
+
+test('login sessions resolve only before expiry and can be revoked', (t) => {
+  const { storage, aliceId } = createStorageWithUsers();
+  t.after(() => storage.close());
+
+  const valid = storage.createLoginSession(aliceId, 60 * 60);
+  assert.equal(storage.findSessionUser(valid.sessionId)?.userId, aliceId);
+  storage.deleteLoginSession(valid.sessionId);
+  assert.equal(storage.findSessionUser(valid.sessionId), undefined);
+
+  const expired = storage.createLoginSession(aliceId, -1);
+  assert.equal(storage.findSessionUser(expired.sessionId), undefined);
+});

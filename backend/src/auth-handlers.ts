@@ -43,6 +43,14 @@ function credentials(payload: unknown) {
   return { name, canonicalName: name.toLowerCase(), password: input.password };
 }
 
+function passwordConfirmation(payload: unknown): string {
+  const input = object(payload);
+  if (typeof input.password !== 'string' || [...input.password].length < 8 || [...input.password].length > 128) {
+    throw new AuthError('INVALID_PAYLOAD', 'Password must contain 8–128 characters.');
+  }
+  return input.password;
+}
+
 /** One process and the default (synchronous, in-memory) Socket.IO adapter only. */
 export class AuthPresence {
   readonly activeSocketByUserId = new Map<string, string>();
@@ -69,7 +77,8 @@ export class AuthPresence {
   private room = (room: RoomRecord): PublicRoom => ({
     roomId: room.roomId, kind: room.kind,
     ...(room.name === null ? {} : { name: room.name }),
-    members: this.storage.getRoomMembers(room.roomId).map(this.toPublicUser),
+    members: (room.kind === 'private' ? this.storage.getPrivateRoomMembers(room.roomId) : this.storage.getRoomMembers(room.roomId))
+      .map(this.toPublicUser),
   });
 
   private groups(): PublicRoom[] { return this.storage.listGroups().map(this.room); }
@@ -81,7 +90,8 @@ export class AuthPresence {
     };
   }
 
-  private broadcast(): void {
+  /** Refresh the authenticated-only online-user and public-group directories. */
+  broadcastDirectories = (): void => {
     const users = this.users();
     const groups = this.groups();
     // Target authenticated sockets explicitly, never the namespace or arbitrary guests.
@@ -93,21 +103,79 @@ export class AuthPresence {
     }
   }
 
+  /** Add a currently authenticated account's live socket to a delivery cache. */
+  joinUserToRoom = (userId: string, roomId: string): void => {
+    const socketId = this.activeSocketByUserId.get(userId);
+    const socket = socketId === undefined ? undefined : this.io.sockets.sockets.get(socketId);
+    if (socket?.connected && socket.data.actor?.userId === userId) {
+      void socket.join(`room:${roomId}`);
+    }
+  };
+
+  /** Deliver a non-room event only to an authenticated account's current socket. */
+  emitToUser = (userId: string, event: string, payload: unknown): void => {
+    const socketId = this.activeSocketByUserId.get(userId);
+    const socket = socketId === undefined ? undefined : this.io.sockets.sockets.get(socketId);
+    if (socket?.connected && socket.data.actor?.userId === userId) {
+      socket.emit(event, payload);
+    }
+  };
+
+  /** Refresh the remaining participant's label when a private-chat peer is deleted. */
+  notifyPrivateRoomChanges(userId: string): void {
+    for (const room of this.storage.listMemberRooms(userId)) {
+      if (room.kind !== 'private') continue;
+      const publicRoom = this.room(room);
+      for (const member of this.storage.getPrivateRoomMembers(room.roomId)) {
+        if (member.userId !== userId) this.emitToUser(member.userId, 'private.updated', { room: publicRoom });
+      }
+    }
+  }
+
+  private clear(socket: Socket): boolean {
+    const actor = socket.data.actor as AuthenticatedActor | undefined;
+    delete socket.data.actor;
+    if (actor && this.activeSocketByUserId.get(actor.userId) === socket.id) {
+      this.activeSocketByUserId.delete(actor.userId);
+    }
+    for (const channel of socket.rooms) {
+      if (channel !== socket.id) void socket.leave(channel);
+    }
+    return actor !== undefined;
+  }
+
+  private bind(socket: Socket, actor: AuthenticatedActor): AccountSnapshot {
+    if (this.isOnline(actor.userId)) {
+      throw new AuthError('SESSION_IN_USE', 'This account is signed in elsewhere. Sign out there first.');
+    }
+    socket.data.actor = actor;
+    this.activeSocketByUserId.set(actor.userId, socket.id);
+    try {
+      for (const room of this.storage.listMemberRooms(actor.userId)) void socket.join(`room:${room.roomId}`);
+      return this.snapshot(actor);
+    } catch (error) {
+      this.clear(socket);
+      throw error;
+    }
+  }
+
+  /** Restores an unexpired HTTP-only-cookie session on a new Socket.IO connection. */
+  restoreSession(socket: Socket, sessionId: string): AccountSnapshot | undefined {
+    if (socket.data.actor) return undefined;
+    const user = this.storage.findSessionUser(sessionId);
+    if (!user) return undefined;
+    try {
+      return this.bind(socket, { userId: user.userId, name: user.name });
+    } catch {
+      return undefined;
+    }
+  }
+
   register(socket: Socket): void {
     let busy = false;
-    const clear = () => {
-      const actor = socket.data.actor as AuthenticatedActor | undefined;
-      delete socket.data.actor;
-      if (actor && this.activeSocketByUserId.get(actor.userId) === socket.id) {
-        this.activeSocketByUserId.delete(actor.userId);
-      }
-      for (const channel of socket.rooms) {
-        if (channel !== socket.id) void socket.leave(channel);
-      }
-      return actor !== undefined;
-    };
+    const clear = () => this.clear(socket);
 
-    for (const event of ['auth.register', 'auth.login', 'auth.logout'] as const) {
+    for (const event of ['auth.register', 'auth.login', 'auth.logout', 'auth.deleteAccount'] as const) {
       socket.on(event, async (...args: unknown[]) => {
         const ack = args[1] as Ack;
         if (typeof ack !== 'function') return; // No acknowledged command, no mutation.
@@ -120,7 +188,22 @@ export class AuthPresence {
             if (!socket.data.actor) throw new AuthError('NOT_AUTHENTICATED', 'Sign in before using chat.');
             clear();
             ack({ ok: true, data: {} });
-            this.broadcast();
+            this.broadcastDirectories();
+            return;
+          }
+          if (event === 'auth.deleteAccount') {
+            const actor = socket.data.actor as AuthenticatedActor | undefined;
+            if (!actor) throw new AuthError('NOT_AUTHENTICATED', 'Sign in before using chat.');
+            busy = acquired = true;
+            const user = this.storage.getUser(actor.userId);
+            const valid = user ? await verify(user.passwordHash, passwordConfirmation(args[0])) : false;
+            if (!socket.connected) return;
+            if (!valid) throw new AuthError('INVALID_CREDENTIALS', 'Password confirmation is incorrect.');
+            this.storage.deleteAccount(actor.userId);
+            this.notifyPrivateRoomChanges(actor.userId);
+            clear();
+            ack({ ok: true, data: {} });
+            this.broadcastDirectories();
             return;
           }
           if (socket.data.actor) throw new AuthError('ALREADY_AUTHENTICATED', 'This connection is already signed in.');
@@ -143,22 +226,10 @@ export class AuthPresence {
             if (!socket.connected) return;
             if (!user || !valid) throw new AuthError('INVALID_CREDENTIALS', 'Name or password is incorrect.');
           }
-          if (this.isOnline(user.userId)) {
-            throw new AuthError('SESSION_IN_USE', 'This account is signed in elsewhere. Sign out there first.');
-          }
           // No await between the active-socket check and binding, so concurrent logins cannot both win.
-          socket.data.actor = { userId: user.userId, name: user.name };
-          this.activeSocketByUserId.set(user.userId, socket.id);
-          let snapshot;
-          try {
-            for (const room of this.storage.listMemberRooms(user.userId)) void socket.join(`room:${room.roomId}`);
-            snapshot = this.snapshot(socket.data.actor);
-          } catch (error) {
-            clear();
-            throw error;
-          }
+          const snapshot = this.bind(socket, { userId: user.userId, name: user.name });
           ack({ ok: true, data: { snapshot } });
-          this.broadcast();
+          this.broadcastDirectories();
         } catch (error) {
           ack({ ok: false, error: error instanceof AuthError
             ? { code: error.code, message: error.message }
@@ -168,6 +239,6 @@ export class AuthPresence {
         }
       });
     }
-    socket.on('disconnect', () => { if (clear()) this.broadcast(); });
+    socket.on('disconnect', () => { if (clear()) this.broadcastDirectories(); });
   }
 }

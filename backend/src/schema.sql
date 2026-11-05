@@ -5,7 +5,8 @@ CREATE TABLE IF NOT EXISTS users (
   name TEXT NOT NULL,
   canonical_name TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  deleted_at TEXT
 ) STRICT;
 
 CREATE TABLE IF NOT EXISTS rooms (
@@ -39,5 +40,15 @@ CREATE TABLE IF NOT EXISTS messages (
   UNIQUE (sender_id, client_message_id)
 ) STRICT;
 
+CREATE TABLE IF NOT EXISTS login_sessions (
+  session_id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL
+) STRICT;
+
 CREATE INDEX IF NOT EXISTS messages_by_room_seq
   ON messages (room_id, seq);
+
+CREATE INDEX IF NOT EXISTS login_sessions_by_expiry
+  ON login_sessions (expires_at);

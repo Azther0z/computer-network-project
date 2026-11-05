@@ -11,6 +11,7 @@ export interface UserRecord {
   canonicalName: string;
   passwordHash: string;
   createdAt: string;
+  deletedAt: string | null;
 }
 
 export interface RoomRecord {
