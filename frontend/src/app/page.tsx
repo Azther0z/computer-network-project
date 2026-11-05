@@ -1,4 +1,4 @@
-import { ConnectionStatus } from '@/components/connection-status';
+import { AuthGate } from '@/components/auth/auth-gate';
 import { ChatWorkspace } from '@/components/chat-workspace';
 import { demoWorkspace } from '@/lib/demo-workspace';
 
@@ -17,17 +17,7 @@ export default function Home() {
 
   return (
     <div className={styles.page}>
-      <main className={styles.main}>
-        <div className={styles.intro}>
-          <p className={styles.eyebrow}>Talkmato</p>
-          <h1>Small talks, fresh connections.</h1>
-          <p>
-            The direct browser-to-Socket.IO connection is ready. Account registration and sign-in
-            will be added next.
-          </p>
-        </div>
-        <ConnectionStatus />
-      </main>
+      <main className={styles.main}><AuthGate /></main>
     </div>
   );
 }

@@ -185,6 +185,23 @@ export class Storage {
     return row ? asUser(row) : undefined;
   }
 
+  findUserByCanonicalName(canonicalName: string): UserRecord | undefined {
+    const row = this.database.prepare('SELECT * FROM users WHERE canonical_name = ?')
+      .get(canonicalName) as UserRow | undefined;
+    return row ? asUser(row) : undefined;
+  }
+
+  listGroups(): RoomRecord[] {
+    return (this.database.prepare("SELECT * FROM rooms WHERE kind = 'group' ORDER BY created_at, room_id")
+      .all() as RoomRow[]).map(asRoom);
+  }
+
+  listMemberRooms(userId: string): RoomRecord[] {
+    return (this.database.prepare(`SELECT r.* FROM rooms r
+      JOIN memberships m ON m.room_id = r.room_id
+      WHERE m.user_id = ? ORDER BY r.created_at, r.room_id`).all(userId) as RoomRow[]).map(asRoom);
+  }
+
   getRoom(roomId: string): RoomRecord | undefined {
     const row = this.database.prepare('SELECT * FROM rooms WHERE room_id = ?').get(roomId) as RoomRow | undefined;
     return row ? asRoom(row) : undefined;
