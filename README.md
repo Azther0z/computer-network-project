@@ -30,10 +30,12 @@ Browsers connect directly to the backend. A new transport connection requires ac
 ```text
 frontend/                 # Next.js (React) UI
   src/app/                # Pages, layout and styles
-  src/components/         # Browser Socket.IO connection status
+  src/components/auth/    # Register/sign-in forms, auth gate and live directory
+  src/lib/                # Shared client DTOs and authenticated Socket.IO lifecycle
 backend/                  # Node.js + Socket.IO + SQLite
   src/
     server.ts             # Server startup and configuration
+    auth-handlers.ts      # Argon2id accounts, socket identity and live presence
     storage.ts            # Persistent accounts, rooms and message queries
     schema.sql            # Database tables and constraints
     types.ts              # Backend data and event types
@@ -44,6 +46,14 @@ README.md
 AGENTS.md
 ```
 
-**Status:** Project skeleton and tested SQLite storage foundation are implemented. Account authentication, Socket.IO room handlers, chat UI, typing and AI remain to be implemented. Cloud hosting is not selected.
+**Status:** SQLite storage, Socket.IO room/message handlers, account authentication and live presence are implemented. The default page has registration/sign-in and live account directories. The conversation UI remains a separate preview; its live integration, typing and AI are pending. Cloud hosting is not selected.
+
+## Authentication integration
+
+Run the backend and frontend separately with `npm install` and `npm run dev` in each directory. Development uses Node 24.19.0. The default backend is `http://localhost:8080`, with frontend origin `http://localhost:3000`; see the `.env.example` files for configuration.
+
+`AuthGate` mounts one `useAccountAuth` hook. A client wrapper can supply a render callback receiving `snapshot`, `socket`, `request`, and `logout` for the conversation UI. `request(event, payload)` refuses disconnected/unauthenticated calls and uses acknowledgement timeouts without buffering or write retries. After reconnect, sign in again. Account snapshots contain all public groups (including offline members) and only the signed-in user's private rooms. The existing `NEXT_PUBLIC_DEMO_CHAT=true` route remains an explicitly labeled, isolated preview.
+
+Backend checks: `npm run typecheck && npm test`. Frontend checks: `npm test && npm run lint && npm run build`. Authentication tests use real Argon2id hashes and WebSocket clients against in-memory SQLite; frontend hook tests cover gated commands, sign-out, transport loss, stale acknowledgements and generic errors.
 
 See the [implementation ownership plan](docs/implementation-ownership.md), [core implementation checklist](docs/core-implementation-checklist.md), [requirements](docs/requirements.md), [architecture](docs/architecture.md) and [UI design](docs/ui-ux.md).
