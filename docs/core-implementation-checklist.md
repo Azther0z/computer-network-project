@@ -9,7 +9,7 @@ The architecture, protocol, data model, event examples and UI flow now use accou
 Agree on:
 
 - Authentication events: `auth.register`, `auth.login` and `auth.logout`.
-- No resume-token feature or browser-held password.
+- No resume-token feature or browser-held password/session ID; use only the selected eight-hour HTTP-only cookie session.
 - A new Socket.IO connection requires registration or sign-in before chat commands.
 - Whether one account can sign in from one or multiple browsers at a time.
 - Password and message validation rules: passwords are 8–128 characters and the backend stores Argon2id hashes only.

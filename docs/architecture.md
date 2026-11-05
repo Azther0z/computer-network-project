@@ -7,7 +7,7 @@ The implementation order and team ownership are in [implementation ownership](im
 ## Selected baseline
 
 - **Accounts:** a first-time user registers a unique name and password. A returning user signs in with the same credentials. The backend stores an Argon2id password hash only.
-- **Connection:** every new Socket.IO connection is unauthenticated. It must complete `auth.register` or `auth.login` before any room/history/write command. Transport reconnect does not restore identity automatically; show a sign-in-required state rather than storing a browser resume token or password.
+- **Connection:** a new Socket.IO connection restores an unexpired eight-hour server session only when its HTTP-only cookie is valid. Otherwise it must complete `auth.register` or `auth.login` before any room/history/write command. The browser never stores a password or session ID in JavaScript.
 - **Presence:** one active socket per account. A second connection for that account receives `SESSION_IN_USE`. Disconnect clears only the active socket, presence and typing state.
 - **Durability:** accounts, rooms, memberships and messages are stored in SQLite. They survive sign-out, browser closure and backend restart when the database file is persistent.
 - **Driver:** development uses Node `24.19.0` and built-in `node:sqlite` / `DatabaseSync`. Each developer has an ignored file at `backend/data/talkmato.dev.sqlite`; tests use `:memory:`. `storage.ts` is the only module that opens SQLite.
@@ -60,8 +60,8 @@ Socket.IO channels are delivery caches, never authorization. A handler must deri
 | Topic | Behavior |
 | --- | --- |
 | Unexpected disconnect | Mark user offline and clear typing; retain durable data. |
-| Transport reconnect | Retry transport a bounded number of times, then require sign-in before application commands. |
-| Browser refresh/reopen | Connect, show sign-in, authenticate, then load authorized rooms/history. |
+| Transport reconnect | Retry transport a bounded number of times; restore only an unexpired HTTP-only cookie session, otherwise require sign-in. |
+| Browser refresh/reopen | Restore an unexpired eight-hour cookie session, or show sign-in; then load authorized rooms/history. |
 | Duplicate login | Reject while the same account has an active socket; do not steal the connection. |
 | Send outcome unknown | Do not automatically replay writes. Manual retry reuses the same `clientMessageId`. |
 | Message/history merge | Deduplicate by message ID/sequence, never by text. |

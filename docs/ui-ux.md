@@ -33,7 +33,9 @@ flowchart TD
     L --> E
 ```
 
-The browser never saves the password or a resume token. A refresh, browser reopen or new transport connection requires the user to sign in again. The server then restores that account’s authorized rooms and saved history.
+The browser never saves the password or a resume token. After successful sign-in, it receives an eight-hour HTTP-only cookie session; refresh/reopen restores the account only while that cookie is valid. The server then restores that account’s authorized rooms and saved history. Sign out revokes the session.
+
+The signed-in workspace offers **Delete account**. It requires password confirmation and is irreversible: the account is signed out, old messages and remaining private-room labels display as `<Unknown>`, and its name becomes available to a new account.
 
 ## Figma source screens
 
