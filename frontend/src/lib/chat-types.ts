@@ -5,7 +5,9 @@ export type ChatUser = {
 };
 
 export type ChatMessage = {
+  seq?: number;
   messageId: string;
+  clientMessageId?: string;
   roomId: string;
   senderId: string;
   senderName: string;

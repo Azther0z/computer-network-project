@@ -16,8 +16,10 @@
 .connection[data-state='offline'] .dot { background: #c34f45; }
 .connection[data-state='connecting'] { color: #796123; background: #f4eedb; }
 .connection[data-state='connecting'] .dot { background: #aa8633; }
-.reconnect { border: 0; color: #a33730; background: transparent; text-decoration: underline; text-underline-offset: 3px; min-height: 44px; }
+.reconnect { border: 0; padding: 0 10px; color: #a33730; background: transparent; text-decoration: underline; text-underline-offset: 3px; }
 .authMain { display: flex; flex-direction: column; align-items: center; padding: 100px 24px 64px; }
+.restoring { display: grid; place-content: center; gap: 16px; min-height: 100svh; color: #746d66; text-align: center; }
+.restoring .brand { justify-content: center; color: #292725; }
 .formPanel { width: min(100%, 520px); padding: 40px; border-radius: 20px; background: #fff; box-shadow: 0 14px 48px rgb(65 43 22 / 7%); }
 .formPanel h1 { font-size: 30px; line-height: 1.25; letter-spacing: -.025em; font-weight: 600; }
 .description { margin-top: 12px; color: #746d66; font-size: 14px; line-height: 1.6; }
@@ -30,17 +32,17 @@
 .form input[aria-invalid='true'] { border-color: #be665e; }
 .passwordField { position: relative; }
 .passwordField input { padding-right: 52px; }
-.passwordToggle { position: absolute; top: 5px; right: 5px; display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 7px; background: transparent; color: #625b55; }
+.passwordToggle { position: absolute; top: 5px; right: 5px; display: grid; place-items: center; width: 44px; min-height: 44px; height: 44px; padding: 0; border: 0; border-radius: 7px; background: transparent; color: #625b55; }
 .passwordToggle:hover { background: #fff8ee; }
 .passwordToggle svg { width: 20px; height: 20px; }
 .help { margin-top: 8px; color: #746d66; font-size: 11px; line-height: 1.5; }
-.primary { min-height: 54px; margin-top: 24px; border: 0; border-radius: 10px; padding: 14px 20px; background: #ca4e44; color: #fff; font-weight: 600 !important; }
+.primary { min-height: 44px; margin-top: 24px; border: 0; padding: 0 20px; background: #ca4e44; color: #fff; font-weight: 600 !important; }
 .primary:hover { background: #b54037; }
 .registerForm .primary { justify-self: end; }
 .error { display: flex; align-items: baseline; gap: 7px; padding: 12px; margin-top: 14px; border-radius: 8px; background: #fff5ef; color: #a13c34; font-size: 12px; line-height: 1.5; }
 .error::before { content: ''; display: block; width: 5px; height: 5px; flex: none; border-radius: 50%; background: currentColor; }
 .switchMode { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px; margin-top: 20px; color: #746d66; font-size: 12px; }
-.link { border: 0; padding: 4px 0; background: transparent; color: #ad3e35; text-decoration: underline; text-underline-offset: 3px; }
+.link { min-height: 28px; border: 0; padding: 4px 0; background: transparent; color: #ad3e35; text-decoration: underline; text-underline-offset: 3px; }
 .link:hover { color: #792c26; }
 .privacyNote { max-width: 48ch; margin-top: 28px; color: #746d66; font-size: 11px; text-align: center; line-height: 1.6; }
 .workspace { display: grid; grid-template-columns: 296px minmax(0, 1fr); min-height: 100svh; background: #fffdfa; }

@@ -8,17 +8,25 @@ import { AccountDirectory } from './account-directory';
 import { Brand } from './brand';
 import styles from './auth.module.css';
 
-type SignedIn = AccountAuth & { snapshot: NonNullable<AccountAuth['snapshot']> };
+type SignedIn = AccountAuth & {
+  snapshot: NonNullable<AccountAuth['snapshot']>;
+  socket: NonNullable<AccountAuth['socket']>;
+};
 
 /** Supplies the same authenticated socket to the conversation UI through children. */
 export function AuthGate({ children }: { children?: (account: SignedIn) => ReactNode }) {
   const auth = useAccountAuth();
   const [mode, setMode] = useState<AuthMode>('login');
   const connected = auth.status === 'connected';
-  if (auth.snapshot && connected) {
+  if (auth.snapshot && auth.socket && connected) {
     return <section className={styles.account} aria-label="Talkmato account">
-      {children ? children({ ...auth, snapshot: auth.snapshot })
+      {children ? children({ ...auth, snapshot: auth.snapshot, socket: auth.socket })
         : <AccountDirectory snapshot={auth.snapshot} busy={auth.busy} logout={auth.logout} />}
+    </section>;
+  }
+  if (connected && !auth.sessionChecked) {
+    return <section className={styles.account} aria-label="Restoring Talkmato session">
+      <div className={styles.restoring}><Brand /><p role="status">Restoring your session…</p></div>
     </section>;
   }
   return <section className={styles.account} aria-label="Talkmato account">

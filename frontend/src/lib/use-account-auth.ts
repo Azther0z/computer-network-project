@@ -13,6 +13,19 @@ const errors: Record<string, string> = {
   ALREADY_AUTHENTICATED: 'This connection is already signed in.',
 };
 
+const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8080';
+
+async function rememberConnection(client: Socket): Promise<void> {
+  if (!client.id) return;
+  await fetch(`${backendUrl}/session`, {
+    method: 'POST', credentials: 'include', headers: { 'x-talkmato-socket-id': client.id },
+  });
+}
+
+async function forgetConnection(): Promise<void> {
+  await fetch(`${backendUrl}/session`, { method: 'DELETE', credentials: 'include' });
+}
+
 /** Mount once in AuthGate; share this connection with the conversation UI. */
 export function useAccountAuth() {
   const connection = useRef<Socket | null>(null);
@@ -24,10 +37,12 @@ export function useAccountAuth() {
   const [snapshot, setSnapshot] = useState<AccountSnapshot | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sessionChecked, setSessionChecked] = useState(false);
 
   useEffect(() => {
-    const client = io(process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8080', {
+    const client = io(backendUrl, {
       path: '/socket.io', transports: ['websocket'], autoConnect: false,
+      withCredentials: true,
       reconnection: true, reconnectionAttempts: 5,
       reconnectionDelay: 1000, reconnectionDelayMax: 5000,
       // No retries option: application writes are never automatically replayed.
@@ -43,10 +58,18 @@ export function useAccountAuth() {
       setSnapshot(null);
       setBusy(false);
     };
-    client.on('connect', () => { resetIdentity(); setSocket(client); setStatus('connected'); });
-    const offline = () => { resetIdentity(); setSocket(null); setStatus('offline'); };
+    client.on('connect', () => { resetIdentity(); setSessionChecked(false); setSocket(client); setStatus('connected'); });
+    const offline = () => { resetIdentity(); setSessionChecked(true); setSocket(null); setStatus('offline'); };
     client.on('disconnect', offline);
     client.on('connect_error', offline);
+    client.on('auth.session', ({ snapshot }: { snapshot?: AccountSnapshot }) => {
+      if (!client.connected) return;
+      if (snapshot) {
+        identity.current = snapshot;
+        setSnapshot(snapshot);
+      }
+      setSessionChecked(true);
+    });
     client.on('users.snapshot', ({ users }: { users: ChatUser[] }) => {
       if (!identity.current) return;
       const online = new Set(users.map(user => user.userId));
@@ -95,13 +118,15 @@ export function useAccountAuth() {
     setBusy(true);
     setError(null);
     try {
-      const response: Ack<{ snapshot: AccountSnapshot }> = await client.timeout(10000).volatile.emitWithAck(
+      const response: Ack<{ snapshot: AccountSnapshot }> = await client.timeout(10000).emitWithAck(
         `auth.${mode}`, { name, password },
       );
       if (current !== generation.current || !client.connected || client.id !== id) return;
       if (response.ok) {
         identity.current = response.data.snapshot;
         setSnapshot(response.data.snapshot);
+        // The opaque cookie is set by HTTP, never exposed to application code or storage.
+        void rememberConnection(client).catch(() => {});
       } else {
         setError(errors[response.error.code] ?? 'Could not sign in. Try again.');
       }
@@ -124,11 +149,41 @@ export function useAccountAuth() {
     identity.current = null;
     setSnapshot(null); // Gate chat immediately, including while the acknowledgement is pending.
     try {
-      const response: Ack<object> = await client.timeout(10000).volatile.emitWithAck('auth.logout', {});
+      const response: Ack<object> = await client.timeout(10000).emitWithAck('auth.logout', {});
       if (current !== generation.current) return;
       if (!response.ok) resetTransport(client);
+      else void forgetConnection().catch(() => {});
     } catch {
       if (current === generation.current) resetTransport(client);
+    } finally {
+      if (current === generation.current) { pending.current = false; setBusy(false); }
+    }
+  }
+
+  async function deleteAccount(password: string): Promise<boolean> {
+    const client = connection.current;
+    if (!identity.current || pending.current || !client?.connected) return false;
+    const current = generation.current;
+    pending.current = true;
+    setBusy(true);
+    setError(null);
+    try {
+      const response: Ack<object> = await client.timeout(10000).emitWithAck('auth.deleteAccount', { password });
+      if (current !== generation.current) return false;
+      if (!response.ok) {
+        setError(errors[response.error.code] ?? 'Could not delete the account. Try again.');
+        return false;
+      }
+      identity.current = null;
+      setSnapshot(null);
+      void forgetConnection().catch(() => {});
+      return true;
+    } catch {
+      if (current === generation.current) {
+        resetTransport(client);
+        setError('The deletion result could not be confirmed. Sign in again to check your account.');
+      }
+      return false;
     } finally {
       if (current === generation.current) { pending.current = false; setBusy(false); }
     }
@@ -142,7 +197,7 @@ export function useAccountAuth() {
     }
     if (event.startsWith('auth.')) throw new Error('Use the authentication controls.');
     const current = generation.current;
-    const response: Ack<T> = await client.timeout(10000).volatile.emitWithAck(event, payload);
+    const response: Ack<T> = await client.timeout(10000).emitWithAck(event, payload);
     if (current !== generation.current || !identity.current) throw new Error('Connection changed. Sign in again.');
     return response;
   }
@@ -150,7 +205,7 @@ export function useAccountAuth() {
   function reconnect() { connection.current?.connect(); }
   function clearError() { setError(null); }
 
-  return { socket, status, snapshot, busy, error, authenticate, logout, request, reconnect, clearError };
+  return { socket, status, snapshot, busy, error, sessionChecked, authenticate, logout, deleteAccount, request, reconnect, clearError };
 }
 
 export type AccountAuth = ReturnType<typeof useAccountAuth>;

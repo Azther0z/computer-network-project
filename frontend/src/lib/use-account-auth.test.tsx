@@ -9,10 +9,10 @@ const { socket, pending, listeners } = vi.hoisted(() => {
     connected: true, id: 'connection-1',
     on: vi.fn((event, callback) => { listeners.set(event, callback); }),
     disconnect: vi.fn(), connect: vi.fn(), removeAllListeners: vi.fn(),
-    timeout: vi.fn(), volatile: {} as { emitWithAck: ReturnType<typeof vi.fn> },
+    timeout: vi.fn(), emitWithAck: vi.fn(),
   };
   socket.timeout.mockReturnValue(socket);
-  socket.volatile.emitWithAck = vi.fn(() => new Promise((resolve, reject) => pending.push({ resolve, reject })));
+  socket.emitWithAck.mockImplementation(() => new Promise((resolve, reject) => pending.push({ resolve, reject })));
   return { socket, pending, listeners };
 });
 vi.mock('socket.io-client', () => ({ io: vi.fn(() => socket) }));
@@ -38,7 +38,7 @@ test('chat identity exists only after a successful acknowledgement; duplicate su
   let task: Promise<void>;
   act(() => { task = result.current.authenticate('login', 'Alice', 'test-password'); });
   await act(async () => { await result.current.authenticate('login', 'Alice', 'test-password'); });
-  expect(socket.volatile.emitWithAck).toHaveBeenCalledTimes(1);
+  expect(socket.emitWithAck).toHaveBeenCalledTimes(1);
   expect(result.current.snapshot).toBeNull();
   await act(async () => { pending[0].resolve({ ok: true, data: { snapshot } }); await task; });
   expect(result.current.snapshot).toEqual(snapshot);
@@ -54,14 +54,14 @@ test('disconnect clears identity and reconnect never replays credentials', async
   expect(result.current.snapshot).toBeNull();
   act(() => { socket.connected = true; socket.id = 'connection-2'; listeners.get('connect')!(); });
   expect(result.current.snapshot).toBeNull();
-  expect(socket.volatile.emitWithAck).toHaveBeenCalledTimes(1);
+  expect(socket.emitWithAck).toHaveBeenCalledTimes(1);
 });
 
 test('disconnected submits never emit; late acknowledgement cannot restore identity after reconnect', async () => {
   const { result } = renderHook(useAccountAuth);
   socket.connected = false;
   await act(async () => { await result.current.authenticate('login', 'Alice', 'test-password'); });
-  expect(socket.volatile.emitWithAck).not.toHaveBeenCalled();
+  expect(socket.emitWithAck).not.toHaveBeenCalled();
   act(() => { socket.connected = true; listeners.get('connect')!(); });
   let task: Promise<void>;
   act(() => { task = result.current.authenticate('login', 'Alice', 'test-password'); });
@@ -79,7 +79,7 @@ test('unknown authentication outcome resets transport without retrying the write
   expect(result.current.snapshot).toBeNull();
   expect(socket.disconnect).toHaveBeenCalled();
   expect(socket.connect).toHaveBeenCalled();
-  expect(socket.volatile.emitWithAck).toHaveBeenCalledTimes(1);
+  expect(socket.emitWithAck).toHaveBeenCalledTimes(1);
   expect(result.current.error).toContain('Sign in');
 });
 
@@ -115,14 +115,14 @@ test('chat commands require authentication and are blocked as soon as sign-out s
   const { result } = renderHook(useAccountAuth);
   act(() => listeners.get('connect')!());
   await expect(result.current.request('room.history', { roomId: 'room' })).rejects.toThrow('Sign in');
-  expect(socket.volatile.emitWithAck).not.toHaveBeenCalled();
+  expect(socket.emitWithAck).not.toHaveBeenCalled();
   let task: Promise<void>;
   act(() => { task = result.current.authenticate('login', 'Alice', 'test-password'); });
   await act(async () => { pending[0].resolve({ ok: true, data: { snapshot } }); await task; });
   let request: Promise<unknown>;
   act(() => { request = result.current.request('room.history', { roomId: 'room' }); });
   await act(async () => { pending[1].resolve({ ok: true, data: { messages: [] } }); await request; });
-  expect(socket.volatile.emitWithAck).toHaveBeenLastCalledWith('room.history', { roomId: 'room' });
+  expect(socket.emitWithAck).toHaveBeenLastCalledWith('room.history', { roomId: 'room' });
   act(() => { task = result.current.logout(); });
   await expect(result.current.request('room.send', {})).rejects.toThrow('Sign in');
   await act(async () => { pending[2].resolve({ ok: true, data: {} }); await task; });
