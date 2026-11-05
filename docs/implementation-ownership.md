@@ -6,16 +6,16 @@ Follow the ordered [core implementation checklist](core-implementation-checklist
 
 ## Current design decision: full accounts
 
-The team chose full account registration and sign-in rather than the earlier browser-held resume-token approach.
+The team chose full account registration and sign-in rather than the earlier browser-held resume-token approach. A successful login also creates a short server session so routine refreshes do not require re-entering credentials.
 
 - A first-time user registers a unique name and password.
 - The backend stores a password hash, never a plaintext password.
 - A returning user signs in with the same name and password to access the same rooms and saved history.
-- Every new Socket.IO connection begins unauthenticated. It must complete `auth.register` or `auth.login` before it can use any chat command.
+- A new Socket.IO connection restores an unexpired eight-hour HTTP-only cookie session when available; otherwise it must complete `auth.register` or `auth.login` before chat commands.
 - Browser closure/disconnect clears only live connection, presence and typing state. It does not delete the account, rooms, memberships or messages.
-- The initial scope has no email, password reset, social login, cross-device session persistence or recovery flow.
+- The initial scope has no email, password reset, social login, cross-device session persistence or recovery flow. A session lasts eight hours and Sign out revokes it.
 
-The architecture, data model, protocol, examples and UI flow use this same account-login baseline. Do not implement `session.resume` or a browser-held resume token. Do not add a session mechanism later unless the team deliberately revisits this decision.
+The architecture, data model, protocol, examples and UI flow use this same account-login baseline. Do not implement `session.resume` or a browser-held resume token. The selected session mechanism is a server-stored ID in an HTTP-only cookie, never a browser-JavaScript token.
 
 ## Shared rules
 

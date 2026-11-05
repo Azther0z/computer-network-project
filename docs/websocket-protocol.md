@@ -4,9 +4,9 @@ This is the account-login protocol for Talkmato. Use `socket.io-client` and Node
 
 ## Connection and authentication
 
-Every Socket.IO `connect` begins unauthenticated, including transport reconnect after a network loss. Only `auth.register` and `auth.login` are permitted before authentication succeeds. A connected transport alone is not account identity.
+Every Socket.IO `connect` checks for Talkmato’s unexpired eight-hour HTTP-only session cookie. It then emits `auth.session` with a snapshot when restoration succeeds, or an empty payload when it does not; only in the latter case are `auth.register` and `auth.login` required. A connected transport alone is not account identity.
 
-The client enables bounded transport reconnect but freezes history/writes while unauthenticated. It must not save a plaintext password in localStorage or automatically replay login credentials. After reconnect, show sign-in-required UI. Do not enable generic command retries or Socket.IO buffering for application writes.
+The client enables bounded transport reconnect but freezes history/writes while unauthenticated. It must not save a plaintext password or opaque session ID in localStorage, or automatically replay login credentials. After an expired/absent session, show sign-in-required UI. Do not enable generic command retries or Socket.IO buffering for application writes.
 
 Use HTTPS/WSS in public deployment. Never log or expose passwords in URLs, DTOs, source code or browser storage. The server stores a password hash only. One active socket is allowed per account; a second authenticated login returns `SESSION_IN_USE` and does not take over the existing connection.
 
@@ -19,6 +19,7 @@ Each command uses one event, one object payload and an acknowledgement callback.
 | `auth.register` | `{name: string, password: string}` | `{snapshot: AccountSnapshot}` | Validate input, atomically reserve name, hash/store password, authenticate current socket and join authorized delivery channels. |
 | `auth.login` | `{name: string, password: string}` | `{snapshot: AccountSnapshot}` | Verify password hash, enforce single active socket, authenticate socket and join authorized delivery channels. Invalid credentials reveal no account-existence detail. |
 | `auth.logout` | `{}` | `{}` | Remove authentication/live presence from current socket only; durable data remains. |
+| `auth.deleteAccount` | `{password: string}` | `{}` | Irreversibly delete the authenticated account after password confirmation; revoke sessions and anonymize its old messages as `Unknown`. |
 | `private.open` | `{peerId: string}` | `{room: PrivateRoom}` | Find/create persisted pair; an initial peer must be online; existing rooms remain usable with an offline peer. |
 | `group.create` | `{name: string}` | `{group: Group}` | Create persistent group with creator only. |
 | `group.join` | `{roomId: string}` | `{group: Group}` | Requester adds only self; first join writes history boundary; repeat keeps it. |
@@ -29,6 +30,8 @@ Each command uses one event, one object payload and an acknowledgement callback.
 
 `auth.register` and `auth.login` return `ALREADY_AUTHENTICATED` if the socket already has an account. Every other application command on an unauthenticated socket returns `NOT_AUTHENTICATED` without revealing room data. `auth.logout` on an unauthenticated socket returns `NOT_AUTHENTICATED`.
 
+`auth.deleteAccount` requires the current account password. It clears live presence and all server sessions, removes the account from public group-member lists, and releases the name for a new account. It does not remove durable messages: their sender DTO becomes `<Unknown>`, so a later account with the same name is never associated with historical content. A remaining private-chat peer also sees `<Unknown>` as that room’s title.
+
 `room.send` uses a browser-generated UUID for `clientMessageId`. An identical manual retry returns the committed message with `replayed: true`; a different room/text with that same key returns `CLIENT_MESSAGE_ID_CONFLICT`. Do not automatically retry sends, joins, group creation, typing or AI requests.
 
 ## Server events and audience
@@ -36,8 +39,10 @@ Each command uses one event, one object payload and an acknowledgement callback.
 | Event | Payload | Recipients |
 | --- | --- | --- |
 | `users.snapshot` | `{users: User[]}` | Authenticated online clients; includes self and only connected users. |
+| `auth.session` | `{snapshot?: AccountSnapshot}` | The newly connected socket, after its cookie-session check completes. |
 | `groups.snapshot` | `{groups: Group[]}` | Authenticated online clients; all groups with online/offline member detail. |
 | `private.opened` | `{room: PrivateRoom}` | Online private participants only, when initially created. |
+| `private.updated` | `{room: PrivateRoom}` | Remaining online private participant after a peer deletes their account; peer name becomes `<Unknown>`. |
 | `message.created` | `Message` | Connected members eligible to read that message, including sender. |
 | `typing.updated` | `{roomId, userId, isTyping, expiresInMs}` | Other connected current room members only. |
 

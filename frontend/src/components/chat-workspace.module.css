@@ -1,7 +1,8 @@
 .workspace {
   display: grid;
   grid-template-columns: minmax(210px, 280px) minmax(0, 1fr);
-  min-height: min(720px, 100vh - 48px);
+  height: 100svh;
+  min-height: 100svh;
   overflow: hidden;
   border: 1px solid #efe4d5;
   border-radius: 24px;
@@ -19,8 +20,10 @@
 }
 
 .sidebar {
-  display: grid;
-  align-content: start;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
   gap: 30px;
   padding: 24px 16px;
   background: #fff8ee;
@@ -33,6 +36,43 @@
   padding: 0 8px;
   color: #292725;
   font-size: 1.2rem;
+}
+
+.workspace .signOut {
+  min-height: 36px;
+  padding: 4px 7px;
+  border: 1px solid #ded2c4;
+  border-radius: 8px;
+  color: #695e52;
+  background: #fffdf9;
+  font: inherit;
+  font-size: 0.7rem;
+  line-height: 1.2;
+}
+
+.accountActions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-left: auto;
+}
+
+.workspace .deleteAccount {
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  color: #a33730;
+  background: transparent;
+  font-size: 0.68rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.sidebarFooter {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: auto;
+  padding: 8px;
 }
 
 .brand span,
@@ -57,7 +97,9 @@
 
 .sectionHeading button {
   width: 28px;
+  min-height: 28px;
   height: 28px;
+  padding: 0;
   border: 0;
   border-radius: 50%;
   color: #ffffff;
@@ -80,6 +122,7 @@
   width: 100%;
   gap: 8px;
   align-items: center;
+  min-height: 40px;
   padding: 10px 8px;
   border: 0;
   border-radius: 10px;
@@ -116,9 +159,18 @@
 }
 
 .conversation {
+  position: relative;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 0;
+  overflow: hidden;
   min-width: 0;
+}
+
+.noRooms {
+  padding: 10px 8px;
+  color: #81766a;
+  font-size: 0.85rem;
 }
 
 .emptyState,
@@ -144,11 +196,42 @@
   line-height: 1.5;
 }
 
+.previewMembers {
+  width: min(100%, 430px);
+  padding: 14px;
+  border: 1px solid #efe4d5;
+  border-radius: 12px;
+  background: #fffdfa;
+  text-align: center;
+}
+
+.previewMembers h3 {
+  color: #81766a;
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.previewMembers ul {
+  display: grid;
+  gap: 8px;
+  padding: 10px 0 0;
+  list-style: none;
+}
+
+.previewMembers li {
+  color: #403b36;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
 .tomato {
   font-size: 3rem;
 }
 
 .roomHeader {
+  position: relative;
+  z-index: 1;
   display: flex;
   justify-content: space-between;
   gap: 16px;
@@ -169,13 +252,97 @@
   font-size: 1.25rem;
 }
 
+.memberDetails {
+  position: relative;
+}
+
+.memberButton {
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid #e2d9cf;
+  border-radius: 9px;
+  color: #695e52;
+  background: #fffdfa;
+  font: inherit;
+  font-size: 0.88rem;
+}
+
+.memberPopover {
+  position: absolute;
+  z-index: 1;
+  right: 0;
+  width: min(260px, calc(100vw - 48px));
+  padding: 10px 12px;
+  margin-top: 8px;
+  border: 1px solid #efe4d5;
+  border-radius: 10px;
+  color: #403b36;
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgb(41 39 37 / 12%);
+  font-size: 0.88rem;
+}
+
+.memberPopover > strong { color: #403b36; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; }
+.memberPopover ul { display: grid; gap: 9px; padding: 10px 0 0; list-style: none; }
+.memberPopover li { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.memberPopover li span { min-width: 0; overflow-wrap: anywhere; }
+.memberPopover small { flex: none; color: #81766a; font-size: 0.78rem; }
+
+.error {
+  position: absolute;
+  z-index: 2;
+  top: 16px;
+  right: 20px;
+  max-width: min(420px, calc(100% - 40px));
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: #8b2c27;
+  background: #ffe7e4;
+  font-size: 0.9rem;
+}
+
+.retry {
+  position: absolute;
+  z-index: 2;
+  top: 70px;
+  right: 20px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid #e7473f;
+  border-radius: 10px;
+  color: #b3322d;
+  background: #ffffff;
+  font: inherit;
+  font-size: 0.85rem;
+}
+
 .messages {
   display: grid;
   align-content: end;
   gap: 14px;
-  min-height: 0;
+  flex: 0 0 auto;
   padding: 28px;
+  min-height: 100%;
+  overflow: visible;
+}
+
+.messageArea {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.messagesEmpty { align-content: center; }
+
+.typingStatus {
+  min-height: 24px;
+  padding: 0 28px 8px;
+  color: #81766a;
+  font-size: 0.85rem;
+  font-style: italic;
 }
 
 .receivedMessage,
@@ -238,10 +405,9 @@
   resize: vertical;
 }
 
-.composer button,
-.groupPreview button,
-.modalActions button:last-child {
-  align-self: end;
+.composer button {
+  align-self: stretch;
+  min-height: 48px;
   padding: 0 18px;
   border: 0;
   border-radius: 12px;
@@ -249,6 +415,19 @@
   background: #e7473f;
   font: inherit;
   font-weight: 700;
+}
+
+.groupPreview button,
+.modalActions button:last-child {
+  border: 0;
+  color: #ffffff;
+  background: #e7473f;
+  font-weight: 700;
+}
+
+.groupPreview button {
+  width: min(100%, 430px);
+  justify-self: center;
 }
 
 .composer button:disabled,
@@ -295,6 +474,19 @@
   color: #403b36;
   background: #f5f1ec;
   font: inherit;
+}
+
+.modalActions .dangerButton {
+  color: #ffffff;
+  background: #b94039;
+}
+
+.deleteError {
+  padding: 10px;
+  border-radius: 8px;
+  color: #8b2c27 !important;
+  background: #ffe7e4;
+  font-size: 0.85rem;
 }
 
 @media (max-width: 720px) {

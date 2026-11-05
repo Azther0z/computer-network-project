@@ -2,7 +2,7 @@
 
 Talkmato persists accounts, rooms, memberships and messages in one SQLite database. Development uses Node `24.19.0` with `node:sqlite` / `DatabaseSync`; each developer’s ignored database file is `backend/data/talkmato.dev.sqlite`. Tests use `:memory:`. `backend/src/storage.ts` owns database opening, schema initialization and transactions.
 
-This document reflects full account registration/sign-in. There are no resume tokens or durable sessions. See [architecture](architecture.md), [protocol](websocket-protocol.md), [implementation ownership](implementation-ownership.md) and the [core checklist](core-implementation-checklist.md).
+This document reflects full account registration/sign-in with eight-hour server sessions. The browser holds no resume token or password; its opaque session ID exists only in an HTTP-only cookie. See [architecture](architecture.md), [protocol](websocket-protocol.md), [implementation ownership](implementation-ownership.md) and the [core checklist](core-implementation-checklist.md).
 
 ## Durable entities
 
@@ -20,6 +20,7 @@ erDiagram
 | Room | `roomId`, `kind`, optional group `name`, optional `privatePairKey` | `kind` is `private` or `group`; canonical private pair key is unique. |
 | Membership | `roomId`, `userId`, `visibleFromSeq`, `joinedAt` | One membership per room/user; group creator is initial member; self-join only. |
 | Message | `seq`, `messageId`, `roomId`, `senderId`, `clientMessageId`, `text`, `sentAt` | Server assigns monotonic sequence/time/sender; unique `(senderId, clientMessageId)`. |
+| LoginSession | opaque `sessionId`, `userId`, `expiresAt`, `createdAt` | Server-only eight-hour session; its ID is sent only in an HTTP-only cookie. |
 
 All IDs except `seq` are opaque strings. Times use UTC ISO 8601. Keep `seq` in JavaScript’s safe-integer range. Socket IDs, online status and typing state are runtime-only and never stored as durable identity.
 
@@ -35,9 +36,11 @@ All IDs except `seq` are opaque strings. Times use UTC ISO 8601. Keep `seq` in J
 
 ## Authentication and runtime state
 
-`auth.register` atomically reserves the canonical name, writes an Argon2id password hash, and authenticates the current socket only after the write succeeds. `auth.login` verifies the stored hash and binds the account to the current socket. Passwords are not saved in browser storage, database logs, DTOs or source control.
+`auth.register` atomically reserves the canonical name, writes an Argon2id password hash, and authenticates the current socket only after the write succeeds. `auth.login` verifies the stored hash and binds the account to the current socket. The browser then exchanges that authenticated socket ID for an eight-hour HTTP-only session cookie; the opaque session ID is never returned in a DTO or saved in browser JavaScript. Passwords are not saved in browser storage, database logs, DTOs or source control.
 
-`activeSocketByUserId` is runtime state. Only one active socket is allowed for an account; a second login gets `SESSION_IN_USE`. Disconnect or `auth.logout` clears live authentication/presence and typing, but does not delete durable data. Every later Socket.IO connection begins unauthenticated and must sign in again.
+`activeSocketByUserId` is runtime state. Only one active socket is allowed for an account; a second login gets `SESSION_IN_USE`. Disconnect clears live authentication/presence and typing, but does not delete durable data. An unexpired cookie session may restore a later Socket.IO connection; sign-out deletes that session and clears the cookie.
+
+Account deletion is a durable tombstone, not a foreign-key-breaking row deletion. It revokes sessions, clears credentials, marks the user deleted and releases the canonical name. Queries for public users/group members exclude tombstones; message history resolves a deleted sender as `<Unknown>`. A remaining private-chat peer also sees `<Unknown>`. A newly registered account with the former name receives a new opaque user ID and no old history.
 
 ## Transactions and visibility
 
