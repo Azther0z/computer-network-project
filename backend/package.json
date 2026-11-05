@@ -14,10 +14,12 @@
     "node": "24.19.x"
   },
   "dependencies": {
+    "argon2": "^0.45.2",
     "socket.io": "^4.8.4"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
+    "socket.io-client": "^4.8.4",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   }

@@ -5,7 +5,7 @@ type ActorSocket = {
 };
 
 /**
- * Guitar replaces this temporary guard with auth.register/auth.login socket binding.
+ * auth.register/auth.login set this binding; logout/disconnect remove it.
  * Room/message code must always obtain its actor through this one boundary.
  */
 export function requireActor(socket: ActorSocket): AuthenticatedActor {
