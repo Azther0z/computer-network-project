@@ -13,6 +13,7 @@ type UserRow = {
   canonical_name: string;
   password_hash: string;
   created_at: string;
+  deleted_at: string | null;
 };
 
 type RoomRow = {
@@ -55,6 +56,7 @@ function asUser(row: UserRow): UserRecord {
     canonicalName: row.canonical_name,
     passwordHash: row.password_hash,
     createdAt: row.created_at,
+    deletedAt: row.deleted_at,
   };
 }
 
@@ -98,6 +100,7 @@ export class Storage {
       timeout: 5_000,
     });
     this.database.exec(schemaSql);
+    this.ensureUserDeletionColumn();
   }
 
   close(): void {
@@ -116,12 +119,13 @@ export class Storage {
       canonicalName: input.canonicalName,
       passwordHash: input.passwordHash,
       createdAt: now(),
+      deletedAt: null,
     };
 
     this.database
       .prepare(
-        `INSERT INTO users (user_id, name, canonical_name, password_hash, created_at)
-         VALUES (:userId, :name, :canonicalName, :passwordHash, :createdAt)`,
+        `INSERT INTO users (user_id, name, canonical_name, password_hash, created_at, deleted_at)
+         VALUES (:userId, :name, :canonicalName, :passwordHash, :createdAt, NULL)`,
       )
       .run({
         userId: user.userId,
@@ -181,14 +185,53 @@ export class Storage {
   }
 
   getUser(userId: string): UserRecord | undefined {
-    const row = this.database.prepare('SELECT * FROM users WHERE user_id = ?').get(userId) as UserRow | undefined;
+    const row = this.database.prepare('SELECT * FROM users WHERE user_id = ? AND deleted_at IS NULL').get(userId) as UserRow | undefined;
     return row ? asUser(row) : undefined;
   }
 
   findUserByCanonicalName(canonicalName: string): UserRecord | undefined {
-    const row = this.database.prepare('SELECT * FROM users WHERE canonical_name = ?')
+    const row = this.database.prepare('SELECT * FROM users WHERE canonical_name = ? AND deleted_at IS NULL')
       .get(canonicalName) as UserRow | undefined;
     return row ? asUser(row) : undefined;
+  }
+
+  createLoginSession(userId: string, ttlSeconds: number): { sessionId: string; expiresAt: string } {
+    this.requireUser(userId);
+    const sessionId = randomUUID();
+    const createdAt = now();
+    const expiresAt = new Date(Date.now() + ttlSeconds * 1_000).toISOString();
+    this.database.prepare(
+      `INSERT INTO login_sessions (session_id, user_id, expires_at, created_at)
+       VALUES (:sessionId, :userId, :expiresAt, :createdAt)`,
+    ).run({ sessionId, userId, expiresAt, createdAt });
+    return { sessionId, expiresAt };
+  }
+
+  findSessionUser(sessionId: string): UserRecord | undefined {
+    const row = this.database.prepare(
+      `SELECT u.* FROM login_sessions AS s
+       INNER JOIN users AS u ON u.user_id = s.user_id
+       WHERE s.session_id = ? AND s.expires_at > ? AND u.deleted_at IS NULL`,
+    ).get(sessionId, now()) as UserRow | undefined;
+    if (!row) this.database.prepare('DELETE FROM login_sessions WHERE session_id = ?').run(sessionId);
+    return row ? asUser(row) : undefined;
+  }
+
+  deleteLoginSession(sessionId: string): void {
+    this.database.prepare('DELETE FROM login_sessions WHERE session_id = ?').run(sessionId);
+  }
+
+  deleteAccount(userId: string): void {
+    const user = this.requireUser(userId);
+    this.inTransaction(() => {
+      this.database.prepare('DELETE FROM login_sessions WHERE user_id = ?').run(userId);
+      this.database.prepare(
+        `UPDATE users
+         SET name = '<Unknown>', canonical_name = :deletedCanonicalName,
+             password_hash = '', deleted_at = :deletedAt
+         WHERE user_id = :userId`,
+      ).run({ userId, deletedCanonicalName: `deleted:${user.userId}`, deletedAt: now() });
+    });
   }
 
   listGroups(): RoomRecord[] {
@@ -212,9 +255,19 @@ export class Storage {
       .prepare(
         `SELECT u.* FROM users AS u
          INNER JOIN memberships AS m ON m.user_id = u.user_id
-         WHERE m.room_id = ? ORDER BY m.joined_at ASC, u.user_id ASC`,
+         WHERE m.room_id = ? AND u.deleted_at IS NULL ORDER BY m.joined_at ASC, u.user_id ASC`,
       )
       .all(roomId) as UserRow[];
+    return rows.map(asUser);
+  }
+
+  /** Private-room DTOs retain a deleted peer as <Unknown>; groups omit deleted accounts. */
+  getPrivateRoomMembers(roomId: string): UserRecord[] {
+    const rows = this.database.prepare(
+      `SELECT u.* FROM users AS u
+       INNER JOIN memberships AS m ON m.user_id = u.user_id
+       WHERE m.room_id = ? ORDER BY m.joined_at ASC, u.user_id ASC`,
+    ).all(roomId) as UserRow[];
     return rows.map(asUser);
   }
 
@@ -382,12 +435,24 @@ export class Storage {
     );
   }
 
+  /** Authorization check for transient room-scoped features such as typing. */
+  assertMember(userId: string, roomId: string): void {
+    this.requireMembership(roomId, userId);
+  }
+
   private requireUser(userId: string): UserRecord {
     const user = this.getUser(userId);
     if (!user) {
       throw new DomainError('USER_NOT_FOUND', 'User was not found.');
     }
     return user;
+  }
+
+  private ensureUserDeletionColumn(): void {
+    const columns = this.database.prepare('PRAGMA table_info(users)').all() as Array<{ name: string }>;
+    if (!columns.some((column) => column.name === 'deleted_at')) {
+      this.database.exec('ALTER TABLE users ADD COLUMN deleted_at TEXT');
+    }
   }
 
   private requireRoom(roomId: string): RoomRecord {
