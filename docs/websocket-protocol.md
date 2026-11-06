@@ -26,7 +26,7 @@ Each command uses one event, one object payload and an acknowledgement callback.
 | `room.send` | `{roomId: string, clientMessageId: string, text: string}` | `{message: Message, replayed: boolean}` | Check actor/membership, commit once, then emit to connected eligible members. |
 | `room.history` | `{roomId: string, beforeSeq?: number, limit?: number}` | `HistoryPage` | Check persisted membership and group first-join boundary; default 50, maximum 100. |
 | `typing.set` | `{roomId: string, isTyping: boolean}` | `{}` | Member-only transient status; no draft text; throttle active updates. Implement after R1–R11. |
-| `message.emojiSuggest` | `{roomId: string, messageId: string}` | `{emoji: string}` | Verify the requester can read selected message; ask AI for one allow-listed emoji; validate response. Implement after R1–R11. |
+| `message.emojiSuggest` | `{roomId: string, messageId: string}` | `{emoji: string}` | Read authorized persisted message text; use staged Clef choices from the default-variant catalog; validate response; requester only. |
 
 `auth.register` and `auth.login` return `ALREADY_AUTHENTICATED` if the socket already has an account. Every other application command on an unauthenticated socket returns `NOT_AUTHENTICATED` without revealing room data. `auth.logout` on an unauthenticated socket returns `NOT_AUTHENTICATED`.
 
@@ -52,6 +52,10 @@ Typing true expires after 3000 ms. Clear it on local/peer disconnect, sign-out, 
 
 The first AI emoji effect returns only to its requesting client. Do not broadcast or persist it as a message/reaction. Provider failure or malformed/non-allow-listed output returns a safe error with no AI result.
 
+AI requests accept exactly `roomId` and `messageId`, without client-supplied text or identity. Apply the same persisted membership and first-join visibility rules as history. Missing and pre-join messages both return `MESSAGE_NOT_AVAILABLE`. After the provider returns, recheck the socket identity and message visibility before acknowledging success. Logout and disconnect cancel pending provider work.
+
+One account has at most one AI request in flight and a ten-second start cooldown. The single backend permits two concurrent AI requests. These limits are transient process state, not a billing cap. The provider operation has an eight-second total deadline, below the browser's ten-second acknowledgement timeout. No provider request is automatically retried. See [AI setup and evidence](saint-ai.md).
+
 ## Validation and errors
 
 - Names: trim/NFC normalize, reject Unicode `Cc`, 1–32 code points; canonical form is locale-independent lowercase.
@@ -72,6 +76,7 @@ The first AI emoji effect returns only to its requesting client. Do not broadcas
 | `MESSAGE_NOT_AVAILABLE` | Missing or historically inaccessible selected AI message. |
 | `CLIENT_MESSAGE_ID_CONFLICT` | Deduplication key reused with different content. |
 | `AI_UNAVAILABLE` / `AI_INVALID_RESPONSE` | Provider failure or invalid allow-list result. |
+| `AI_RATE_LIMITED` | Account cooldown, account request already in flight, or global AI concurrency limit. |
 | `STORAGE_UNAVAILABLE` / `INTERNAL_ERROR` | No durable success; do not expose implementation detail. |
 
 Prioritize authorization before exposing room/type/message metadata. Test invalid credentials, duplicate-name registration, stale socket cleanup, private/group isolation, first-join history exclusion, duplicate sends, typing expiry and AI message visibility.

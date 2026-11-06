@@ -7,6 +7,8 @@ import { registerRoomHandlers } from './room-handlers.js';
 import { AuthPresence } from './auth-handlers.js';
 import { Storage } from './storage.js';
 import { TypingPresence } from './typing-handlers.js';
+import { ClefSelector } from './emoji/clef.js';
+import { EmojiEffects } from './emoji/handlers.js';
 
 const port = Number(process.env.PORT ?? 8080);
 const frontendOrigin = process.env.FRONTEND_ORIGIN ?? 'http://localhost:3000';
@@ -94,6 +96,10 @@ const io = new Server(httpServer, {
 
 const auth = new AuthPresence(io, storage);
 const typing = new TypingPresence(io, storage);
+const emojiEffects = new EmojiEffects(storage, new ClefSelector({
+  accountId: process.env.CLOUDFLARE_ACCOUNT_ID,
+  token: process.env.CLOUDFLARE_AUTH_TOKEN ?? process.env.CLOUDFLARE_API_TOKEN,
+}));
 io.on('connection', (socket) => {
   auth.register(socket);
   registerRoomHandlers(socket, io, storage, {
@@ -105,6 +111,7 @@ io.on('connection', (socket) => {
     clearTyping: typing.clearTyping,
   });
   typing.register(socket);
+  emojiEffects.register(socket);
   const sessionId = cookieValue(socket.handshake.headers.cookie, sessionCookieName);
   const snapshot = sessionId === undefined ? undefined : auth.restoreSession(socket, sessionId);
   if (snapshot) {

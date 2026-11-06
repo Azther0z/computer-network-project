@@ -7,6 +7,7 @@ import type { ChatMessage, GroupRoom, PrivateRoom } from '@/lib/chat-types';
 import type { AccountAuth } from '@/lib/use-account-auth';
 
 import styles from './chat-workspace.module.css';
+import { MessageEmojiEffect } from './message-emoji-effect';
 
 type SignedInAccount = AccountAuth & {
   snapshot: AccountSnapshot;
@@ -335,7 +336,7 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
               {loadingRoomId !== activeRoom.roomId && activeMessages.length === 0 && <li className={styles.noMessages}>No messages yet.</li>}
               {activeMessages.map((message) => {
                 const own = message.senderId === snapshot.self.userId;
-                return <li key={message.messageId} className={own ? styles.ownMessage : styles.receivedMessage}>{!own && <strong>{message.senderName}</strong>}<p>{message.text}</p><time>{displayTime(message.sentAt)}</time></li>;
+                return <li key={message.messageId} className={own ? styles.ownMessage : styles.receivedMessage}>{!own && <strong>{message.senderName}</strong>}<p>{message.text}</p><time>{displayTime(message.sentAt)}</time><MessageEmojiEffect roomId={activeRoom.roomId} messageId={message.messageId} request={account.request} /></li>;
               })}
             </ol>
             <p className={styles.typingStatus} aria-live="polite">{typingNames.length === 1 ? `${typingNames[0]} is typing…` : typingNames.length > 1 ? `${typingNames.join(', ')} are typing…` : ''}</p>

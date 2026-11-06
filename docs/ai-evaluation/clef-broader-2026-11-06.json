@@ -1,0 +1,1093 @@
+{
+  "generatedAt": "2026-11-05T18:02:45.282Z",
+  "model": "@cf/cloudflare/clef",
+  "fixtureVersion": 2,
+  "evaluationVersion": 5,
+  "mode": "broader",
+  "requestDesignSha256": "6a00d8997a03b52625020633c974ad940963bf5babb7ee24711293b8923ac815",
+  "catalog": {
+    "unicodeVersion": "17.0",
+    "entries": 3944,
+    "reachable": 3944,
+    "standaloneComponentsExcluded": 9,
+    "decisionNodes": 298,
+    "maxChoices": 180,
+    "maxCalls": 4,
+    "nonDefaultVariants": 2225,
+    "source": "https://unicode.org/Public/17.0.0/emoji/emoji-test.txt",
+    "sourceSha256": "1d8a944f88d7952f7ef7c5167fef3c67995bcae24543949710231b03a201acda"
+  },
+  "rubric": {
+    "version": "semantic-fit-1",
+    "decision": "Meaning in context; clearly fitting alternatives count. Ambiguous choices require human review.",
+    "rules": [
+      "Match the emotional tone or communicative intent of the selected message, not an empathetic reply.",
+      "When there is no clear emotion, choose an emoji related to the message subject.",
+      "Accept different emojis that clearly express the same meaning. Do not require one predetermined character.",
+      "Mark a plausible but unclear interpretation ambiguous. Mark an opposite, unrelated, or misleading meaning mismatch.",
+      "Use default yellow or gender-neutral forms where available, even if the text requests a variant.",
+      "Validate the complete Unicode sequence and provider response separately from semantic quality."
+    ],
+    "verdicts": [
+      "fit",
+      "ambiguous",
+      "mismatch"
+    ],
+    "acceptance": "No automatic adoption. Review every output, ask the user about ambiguity, and report English and Thai separately."
+  },
+  "summary": {
+    "status": "completed",
+    "scheduledMessages": 16,
+    "completedMessages": 16,
+    "completedProviderCalls": 40,
+    "maxProviderCalls": 64,
+    "byLanguage": {
+      "en": {
+        "completed": 8,
+        "reviewPending": 8,
+        "fit": null,
+        "ambiguous": null,
+        "mismatch": null
+      },
+      "th": {
+        "completed": 8,
+        "reviewPending": 8,
+        "fit": null,
+        "ambiguous": null,
+        "mismatch": null
+      }
+    },
+    "pairedLanguages": {
+      "completed": 8,
+      "sameChoice": 7
+    },
+    "repeatsCompleted": 0,
+    "repeatMatches": 0,
+    "latencyMs": {
+      "p50": 1536,
+      "p95": 2049
+    },
+    "policyViolations": 1,
+    "inputTokens": 59997,
+    "estimatedNeurons": 1310,
+    "exploratoryGate": false,
+    "adoptionApproved": false,
+    "attemptedProviderCalls": 40,
+    "unaccountedProviderAttempts": 0,
+    "qualityStatus": "awaiting_semantic_review"
+  },
+  "failure": null,
+  "rows": [
+    {
+      "id": "en-love",
+      "language": "en",
+      "repetition": 1,
+      "strategy": "staged",
+      "acceptable": null,
+      "text": "I love you and care about you so much.",
+      "reviewCriteria": "Affection, love, or caring. Different affectionate faces or symbols can fit.",
+      "semanticReview": "pending",
+      "agreed": null,
+      "choice": "e_1f60d",
+      "emoji": "😍",
+      "name": "smiling face with heart-eyes",
+      "variantViolation": null,
+      "stages": [
+        {
+          "node": "n_597",
+          "options": 9,
+          "choice": "n_0",
+          "confidence": 0.62,
+          "inputTokens": 426,
+          "elapsedMs": 931
+        },
+        {
+          "node": "n_0",
+          "options": 171,
+          "choice": "e_1f60d",
+          "confidence": 0.0578,
+          "inputTokens": 5317,
+          "elapsedMs": 696
+        }
+      ],
+      "elapsedMs": 1628
+    },
+    {
+      "id": "th-love",
+      "language": "th",
+      "repetition": 1,
+      "strategy": "staged",
+      "acceptable": null,
+      "text": "รักและเป็นห่วงเธอมากนะ",
+      "reviewCriteria": "Affection, love, or caring. Different affectionate faces or symbols can fit.",
+      "semanticReview": "pending",
+      "agreed": null,
+      "choice": "e_1f60d",
+      "emoji": "😍",
+      "name": "smiling face with heart-eyes",
+      "variantViolation": null,
+      "stages": [
+        {
+          "node": "n_597",
+          "options": 9,
+          "choice": "n_0",
+          "confidence": 0.4293,
+          "inputTokens": 426,
+          "elapsedMs": 1041
+        },
+        {
+          "node": "n_0",
+          "options": 171,
+          "choice": "e_1f60d",
+          "confidence": 0.0401,
+          "inputTokens": 5317,
+          "elapsedMs": 801
+        }
+      ],
+      "elapsedMs": 1843
+    },
+    {
+      "id": "en-angry",
+      "language": "en",
+      "repetition": 1,
+      "strategy": "staged",
+      "acceptable": null,
+      "text": "I am furious that they broke their promise again!",
+      "reviewCriteria": "Anger, irritation, or frustration. Joyful approval would mismatch.",
+      "semanticReview": "pending",
+      "agreed": null,
+      "choice": "e_1f621",
+      "emoji": "😡",
+      "name": "enraged face",
+      "variantViolation": null,
+      "stages": [
+        {
+          "node": "n_597",
+          "options": 9,
+          "choice": "n_0",
+          "confidence": 0.3257,
+          "inputTokens": 426,
+          "elapsedMs": 614
+        },
+        {
+          "node": "n_0",
+          "options": 171,
+          "choice": "e_1f621",
+          "confidence": 0.1675,
+          "inputTokens": 5317,
+          "elapsedMs": 922
+        }
+      ],
+      "elapsedMs": 1536
+    },
+    {
+      "id": "th-angry",
+      "language": "th",
+      "repetition": 1,
+      "strategy": "staged",
+      "acceptable": null,
+      "text": "โกรธมาก ทำไมผิดสัญญาอีกแล้ว!",
+      "reviewCriteria": "Anger, irritation, or frustration. Joyful approval would mismatch.",
+      "semanticReview": "pending",
+      "agreed": null,
+      "choice": "e_1f621",
+      "emoji": "😡",
+      "name": "enraged face",
+      "variantViolation": null,
+      "stages": [
+        {
+          "node": "n_597",
+          "options": 9,
+          "choice": "n_0",
+          "confidence": 0.4895,
+          "inputTokens": 430,
+          "elapsedMs": 306
+        },
+        {
+          "node": "n_0",
+          "options": 171,
+          "choice": "e_1f621",
+          "confidence": 0.1406,
+          "inputTokens": 5321,
+          "elapsedMs": 820
+        }
+      ],
+      "elapsedMs": 1126
+    },
+    {
+      "id": "en-think",
+      "language": "en",
+      "repetition": 1,
+      "strategy": "staged",
+      "acceptable": null,
+      "text": "I am thinking about which option to choose.",
+      "reviewCriteria": "Considering a choice, thought, or uncertainty. Related thinking expressions can fit.",
+      "semanticReview": "pending",
+      "agreed": null,
+      "choice": "e_1f914",
+      "emoji": "🤔",
+      "name": "thinking face",
+      "variantViolation": null,
+      "stages": [
+        {
+          "node": "n_597",
+          "options": 9,
+          "choice": "n_0",
+          "confidence": 0.2471,
+          "inputTokens": 425,
+          "elapsedMs": 849
+        },
+        {
+          "node": "n_0",
+          "options": 171,
+          "choice": "e_1f914",
+          "confidence": 0.186,
+          "inputTokens": 5316,
+          "elapsedMs": 789
+        }
+      ],
+      "elapsedMs": 1638
+    },
+    {
+      "id": "th-think",
+      "language": "th",
+      "repetition": 1,
+      "strategy": "staged",
+      "acceptable": null,
+      "text": "กำลังคิดอยู่ว่าจะเลือกทางไหนดี",
+      "reviewCriteria": "Considering a choice, thought, or uncertainty. Related thinking expressions can fit.",
+      "semanticReview": "pending",
+      "agreed": null,
+      "choice": "e_1f914",
+      "emoji": "🤔",
+      "name": "thinking face",
+      "variantViolation": null,
+      "stages": [
+        {
+          "node": "n_597",
+          "options": 9,
+          "choice": "n_0",
+          "confidence": 0.2958,
+          "inputTokens": 432,
+          "elapsedMs": 511
+        },
+        {
+          "node": "n_0",
+          "options": 171,
+          "choice": "e_1f914",
+          "confidence": 0.1266,
+          "inputTokens": 5323,
+          "elapsedMs": 953
+        }
+      ],
+      "elapsedMs": 1465
+    },
+    {
+      "id": "en-tired",
+      "language": "en",
+      "repetition": 1,
+      "strategy": "staged",
+      "acceptable": null,
+      "text": "I can barely keep my eyes open. I need sleep.",
+      "reviewCriteria": "Sleepiness, exhaustion, or needing sleep. Related sleep or rest symbols can fit.",
+      "semanticReview": "pending",
+      "agreed": null,
+      "choice": "e_1f62a",
+      "emoji": "😪",
+      "name": "sleepy face",
+      "variantViolation": null,
+      "stages": [
+        {
+          "node": "n_597",
+          "options": 9,
+          "choice": "n_0",
+          "confidence": 0.1484,
+          "inputTokens": 428,
+          "elapsedMs": 486
+        },
+        {
+          "node": "n_0",
+          "options": 171,
+          "choice": "e_1f62a",
+          "confidence": 0.1258,
+          "inputTokens": 5319,
+          "elapsedMs": 814
+        }
+      ],
+      "elapsedMs": 1300
+    },
+    {
+      "id": "th-tired",
+      "language": "th",
+      "repetition": 1,
+      "strategy": "staged",
+      "acceptable": null,
+      "text": "ง่วงจนลืมตาแทบไม่ไหวแล้ว อยากนอน",
+      "reviewCriteria": "Sleepiness, exhaustion, or needing sleep. Related sleep or rest symbols can fit.",
+      "semanticReview": "pending",
+      "agreed": null,
+      "choice": "e_1f62a",
+      "emoji": "😪",
+      "name": "sleepy face",
+      "variantViolation": null,
+      "stages": [
+        {
+          "node": "n_597",
+          "options": 9,
+          "choice": "n_0",
+          "confidence": 0.2905,
+          "inputTokens": 430,
+          "elapsedMs": 408
+        },
+        {
+          "node": "n_0",
+          "options": 171,
+          "choice": "e_1f62a",
+          "confidence": 0.1312,
+          "inputTokens": 5321,
+          "elapsedMs": 717
+        }
+      ],
+      "elapsedMs": 1125
+    },
+    {
+      "id": "en-food",
+      "language": "en",
+      "repetition": 1,
+      "strategy": "staged",
+      "acceptable": null,
+      "text": "This noodle soup is delicious. I want another bowl!",
+      "reviewCriteria": "Pleasure or appetite associated with delicious food. A related food emoji can fit.",
+      "semanticReview": "pending",
+      "agreed": null,
+      "choice": "e_1f35c",
+      "emoji": "🍜",
+      "name": "steaming bowl",
+      "variantViolation": null,
+      "stages": [
+        {
+          "node": "n_597",
+          "options": 9,
+          "choice": "n_278",
+          "confidence": 0.7848,
+          "inputTokens": 428,
+          "elapsedMs": 614
+        },
+        {
+          "node": "n_278",
+          "options": 7,
+          "choice": "n_274",
+          "confidence": 0.4334,
+          "inputTokens": 388,
+          "elapsedMs": 922
+        },
+        {
+          "node": "n_274",
+          "options": 17,
+          "choice": "e_1f35c",
+          "confidence": 0.8101,
+          "inputTokens": 708,
+          "elapsedMs": 513
+        }
+      ],
+      "elapsedMs": 2049
+    },
+    {
+      "id": "th-food",
+      "language": "th",
+      "repetition": 1,
+      "strategy": "staged",
+      "acceptable": null,
+      "text": "ก๋วยเตี๋ยวอร่อยมาก อยากกินอีกชาม!",
+      "reviewCriteria": "Pleasure or appetite associated with delicious food. A related food emoji can fit.",
+      "semanticReview": "pending",
+      "agreed": null,
+      "choice": "e_1f35c",
+      "emoji": "🍜",
+      "name": "steaming bowl",
+      "variantViolation": null,
+      "stages": [
+        {
+          "node": "n_597",
+          "options": 9,
+          "choice": "n_278",
+          "confidence": 0.6783,
+          "inputTokens": 435,
+          "elapsedMs": 306
+        },
+        {
+          "node": "n_278",
+          "options": 7,
+          "choice": "n_274",
+          "confidence": 0.5026,
+          "inputTokens": 395,
+          "elapsedMs": 614
+        },
+        {
+          "node": "n_274",
+          "options": 17,
+          "choice": "e_1f35c",
+          "confidence": 0.7543,
+          "inputTokens": 715,
+          "elapsedMs": 410
+        }
+      ],
+      "elapsedMs": 1330
+    },
+    {
+      "id": "en-guitar",
+      "language": "en",
+      "repetition": 1,
+      "strategy": "staged",
+      "acceptable": null,
+      "text": "This is a guitar.",
+      "reviewCriteria": "A neutral factual description of a guitar. The subject must remain recognizable.",
+      "semanticReview": "pending",
+      "agreed": null,
+      "choice": "e_1f3b8",
+      "emoji": "🎸",
+      "name": "guitar",
+      "variantViolation": null,
+      "stages": [
+        {
+          "node": "n_597",
+          "options": 9,
+          "choice": "n_315",
+          "confidence": 0.5165,
+          "inputTokens": 421,
+          "elapsedMs": 409
+        },
+        {
+          "node": "n_315",
+          "options": 18,
+          "choice": "n_300",
+          "confidence": 0.9006,
+          "inputTokens": 607,
+          "elapsedMs": 409
+        },
+        {
+          "node": "n_300",
+          "options": 13,
+          "choice": "e_1f3b8",
+          "confidence": 0.9193,
+          "inputTokens": 569,
+          "elapsedMs": 409
+        }
+      ],
+      "elapsedMs": 1227
+    },
+    {
+      "id": "th-guitar",
+      "language": "th",
+      "repetition": 1,
+      "strategy": "staged",
+      "acceptable": null,
+      "text": "นี่คือกีตาร์",
+      "reviewCriteria": "A neutral factual description of a guitar. The subject must remain recognizable.",
+      "semanticReview": "pending",
+      "agreed": null,
+      "choice": "e_1f3b8",
+      "emoji": "🎸",
+      "name": "guitar",
+      "variantViolation": null,
+      "stages": [
+        {
+          "node": "n_597",
+          "options": 9,
+          "choice": "n_315",
+          "confidence": 0.5201,
+          "inputTokens": 424,
+          "elapsedMs": 410
+        },
+        {
+          "node": "n_315",
+          "options": 18,
+          "choice": "n_300",
+          "confidence": 0.9009,
+          "inputTokens": 610,
+          "elapsedMs": 512
+        },
+        {
+          "node": "n_300",
+          "options": 13,
+          "choice": "e_1f3b8",
+          "confidence": 0.9059,
+          "inputTokens": 572,
+          "elapsedMs": 614
+        }
+      ],
+      "elapsedMs": 1537
+    },
+    {
+      "id": "en-laptop",
+      "language": "en",
+      "repetition": 1,
+      "strategy": "staged",
+      "acceptable": null,
+      "text": "This is a laptop computer.",
+      "reviewCriteria": "A neutral factual description of a laptop computer. The subject must remain recognizable.",
+      "semanticReview": "pending",
+      "agreed": null,
+      "choice": "e_1f4bb",
+      "emoji": "💻",
+      "name": "laptop",
+      "variantViolation": null,
+      "stages": [
+        {
+          "node": "n_597",
+          "options": 9,
+          "choice": "n_315",
+          "confidence": 0.7463,
+          "inputTokens": 422,
+          "elapsedMs": 512
+        },
+        {
+          "node": "n_315",
+          "options": 18,
+          "choice": "n_302",
+          "confidence": 0.9124,
+          "inputTokens": 608,
+          "elapsedMs": 819
+        },
+        {
+          "node": "n_302",
+          "options": 14,
+          "choice": "e_1f4bb",
+          "confidence": 0.8498,
+          "inputTokens": 615,
+          "elapsedMs": 410
+        }
+      ],
+      "elapsedMs": 1741
+    },
+    {
+      "id": "th-laptop",
+      "language": "th",
+      "repetition": 1,
+      "strategy": "staged",
+      "acceptable": null,
+      "text": "นี่คือคอมพิวเตอร์โน้ตบุ๊ก",
+      "reviewCriteria": "A neutral factual description of a laptop computer. The subject must remain recognizable.",
+      "semanticReview": "pending",
+      "agreed": null,
+      "choice": "e_1f4bb",
+      "emoji": "💻",
+      "name": "laptop",
+      "variantViolation": null,
+      "stages": [
+        {
+          "node": "n_597",
+          "options": 9,
+          "choice": "n_315",
+          "confidence": 0.5931,
+          "inputTokens": 433,
+          "elapsedMs": 1139
+        },
+        {
+          "node": "n_315",
+          "options": 18,
+          "choice": "n_302",
+          "confidence": 0.9095,
+          "inputTokens": 619,
+          "elapsedMs": 502
+        },
+        {
+          "node": "n_302",
+          "options": 14,
+          "choice": "e_1f4bb",
+          "confidence": 0.7902,
+          "inputTokens": 626,
+          "elapsedMs": 309
+        }
+      ],
+      "elapsedMs": 1951
+    },
+    {
+      "id": "en-default",
+      "language": "en",
+      "repetition": 1,
+      "strategy": "staged",
+      "acceptable": null,
+      "text": "Give me a thumbs up with dark skin.",
+      "reviewCriteria": "A request for thumbs-up. Select the default form despite the requested skin variant.",
+      "semanticReview": "pending",
+      "agreed": null,
+      "choice": "e_1f44d_1f3ff",
+      "emoji": "👍🏿",
+      "name": "thumbs up: dark skin tone",
+      "variantViolation": "skin_tone",
+      "stages": [
+        {
+          "node": "n_597",
+          "options": 9,
+          "choice": "n_261",
+          "confidence": 0.6612,
+          "inputTokens": 425,
+          "elapsedMs": 716
+        },
+        {
+          "node": "n_261",
+          "options": 16,
+          "choice": "n_4",
+          "confidence": 0.2453,
+          "inputTokens": 568,
+          "elapsedMs": 434
+        },
+        {
+          "node": "n_4",
+          "options": 36,
+          "choice": "e_1f44d_1f3ff",
+          "confidence": 0.2272,
+          "inputTokens": 1610,
+          "elapsedMs": 687
+        }
+      ],
+      "elapsedMs": 1837
+    },
+    {
+      "id": "th-default",
+      "language": "th",
+      "repetition": 1,
+      "strategy": "staged",
+      "acceptable": null,
+      "text": "ขออีโมจิชูนิ้วโป้งผิวเข้ม",
+      "reviewCriteria": "A request for thumbs-up. Select the default form despite the requested skin variant.",
+      "semanticReview": "pending",
+      "agreed": null,
+      "choice": "e_1f530",
+      "emoji": "🔰",
+      "name": "Japanese symbol for beginner",
+      "variantViolation": null,
+      "stages": [
+        {
+          "node": "n_597",
+          "options": 9,
+          "choice": "n_330",
+          "confidence": 0.0602,
+          "inputTokens": 431,
+          "elapsedMs": 617
+        },
+        {
+          "node": "n_330",
+          "options": 14,
+          "choice": "n_326",
+          "confidence": 0.0373,
+          "inputTokens": 534,
+          "elapsedMs": 363
+        },
+        {
+          "node": "n_326",
+          "options": 22,
+          "choice": "e_1f530",
+          "confidence": 0.0404,
+          "inputTokens": 860,
+          "elapsedMs": 351
+        }
+      ],
+      "elapsedMs": 1331
+    }
+  ],
+  "calls": [
+    {
+      "caseId": "en-love",
+      "repetition": 1,
+      "node": "n_597",
+      "options": 9,
+      "choice": "n_0",
+      "confidence": 0.62,
+      "inputTokens": 426,
+      "elapsedMs": 931
+    },
+    {
+      "caseId": "en-love",
+      "repetition": 1,
+      "node": "n_0",
+      "options": 171,
+      "choice": "e_1f60d",
+      "confidence": 0.0578,
+      "inputTokens": 5317,
+      "elapsedMs": 696
+    },
+    {
+      "caseId": "th-love",
+      "repetition": 1,
+      "node": "n_597",
+      "options": 9,
+      "choice": "n_0",
+      "confidence": 0.4293,
+      "inputTokens": 426,
+      "elapsedMs": 1041
+    },
+    {
+      "caseId": "th-love",
+      "repetition": 1,
+      "node": "n_0",
+      "options": 171,
+      "choice": "e_1f60d",
+      "confidence": 0.0401,
+      "inputTokens": 5317,
+      "elapsedMs": 801
+    },
+    {
+      "caseId": "en-angry",
+      "repetition": 1,
+      "node": "n_597",
+      "options": 9,
+      "choice": "n_0",
+      "confidence": 0.3257,
+      "inputTokens": 426,
+      "elapsedMs": 614
+    },
+    {
+      "caseId": "en-angry",
+      "repetition": 1,
+      "node": "n_0",
+      "options": 171,
+      "choice": "e_1f621",
+      "confidence": 0.1675,
+      "inputTokens": 5317,
+      "elapsedMs": 922
+    },
+    {
+      "caseId": "th-angry",
+      "repetition": 1,
+      "node": "n_597",
+      "options": 9,
+      "choice": "n_0",
+      "confidence": 0.4895,
+      "inputTokens": 430,
+      "elapsedMs": 306
+    },
+    {
+      "caseId": "th-angry",
+      "repetition": 1,
+      "node": "n_0",
+      "options": 171,
+      "choice": "e_1f621",
+      "confidence": 0.1406,
+      "inputTokens": 5321,
+      "elapsedMs": 820
+    },
+    {
+      "caseId": "en-think",
+      "repetition": 1,
+      "node": "n_597",
+      "options": 9,
+      "choice": "n_0",
+      "confidence": 0.2471,
+      "inputTokens": 425,
+      "elapsedMs": 849
+    },
+    {
+      "caseId": "en-think",
+      "repetition": 1,
+      "node": "n_0",
+      "options": 171,
+      "choice": "e_1f914",
+      "confidence": 0.186,
+      "inputTokens": 5316,
+      "elapsedMs": 789
+    },
+    {
+      "caseId": "th-think",
+      "repetition": 1,
+      "node": "n_597",
+      "options": 9,
+      "choice": "n_0",
+      "confidence": 0.2958,
+      "inputTokens": 432,
+      "elapsedMs": 511
+    },
+    {
+      "caseId": "th-think",
+      "repetition": 1,
+      "node": "n_0",
+      "options": 171,
+      "choice": "e_1f914",
+      "confidence": 0.1266,
+      "inputTokens": 5323,
+      "elapsedMs": 953
+    },
+    {
+      "caseId": "en-tired",
+      "repetition": 1,
+      "node": "n_597",
+      "options": 9,
+      "choice": "n_0",
+      "confidence": 0.1484,
+      "inputTokens": 428,
+      "elapsedMs": 486
+    },
+    {
+      "caseId": "en-tired",
+      "repetition": 1,
+      "node": "n_0",
+      "options": 171,
+      "choice": "e_1f62a",
+      "confidence": 0.1258,
+      "inputTokens": 5319,
+      "elapsedMs": 814
+    },
+    {
+      "caseId": "th-tired",
+      "repetition": 1,
+      "node": "n_597",
+      "options": 9,
+      "choice": "n_0",
+      "confidence": 0.2905,
+      "inputTokens": 430,
+      "elapsedMs": 408
+    },
+    {
+      "caseId": "th-tired",
+      "repetition": 1,
+      "node": "n_0",
+      "options": 171,
+      "choice": "e_1f62a",
+      "confidence": 0.1312,
+      "inputTokens": 5321,
+      "elapsedMs": 717
+    },
+    {
+      "caseId": "en-food",
+      "repetition": 1,
+      "node": "n_597",
+      "options": 9,
+      "choice": "n_278",
+      "confidence": 0.7848,
+      "inputTokens": 428,
+      "elapsedMs": 614
+    },
+    {
+      "caseId": "en-food",
+      "repetition": 1,
+      "node": "n_278",
+      "options": 7,
+      "choice": "n_274",
+      "confidence": 0.4334,
+      "inputTokens": 388,
+      "elapsedMs": 922
+    },
+    {
+      "caseId": "en-food",
+      "repetition": 1,
+      "node": "n_274",
+      "options": 17,
+      "choice": "e_1f35c",
+      "confidence": 0.8101,
+      "inputTokens": 708,
+      "elapsedMs": 513
+    },
+    {
+      "caseId": "th-food",
+      "repetition": 1,
+      "node": "n_597",
+      "options": 9,
+      "choice": "n_278",
+      "confidence": 0.6783,
+      "inputTokens": 435,
+      "elapsedMs": 306
+    },
+    {
+      "caseId": "th-food",
+      "repetition": 1,
+      "node": "n_278",
+      "options": 7,
+      "choice": "n_274",
+      "confidence": 0.5026,
+      "inputTokens": 395,
+      "elapsedMs": 614
+    },
+    {
+      "caseId": "th-food",
+      "repetition": 1,
+      "node": "n_274",
+      "options": 17,
+      "choice": "e_1f35c",
+      "confidence": 0.7543,
+      "inputTokens": 715,
+      "elapsedMs": 410
+    },
+    {
+      "caseId": "en-guitar",
+      "repetition": 1,
+      "node": "n_597",
+      "options": 9,
+      "choice": "n_315",
+      "confidence": 0.5165,
+      "inputTokens": 421,
+      "elapsedMs": 409
+    },
+    {
+      "caseId": "en-guitar",
+      "repetition": 1,
+      "node": "n_315",
+      "options": 18,
+      "choice": "n_300",
+      "confidence": 0.9006,
+      "inputTokens": 607,
+      "elapsedMs": 409
+    },
+    {
+      "caseId": "en-guitar",
+      "repetition": 1,
+      "node": "n_300",
+      "options": 13,
+      "choice": "e_1f3b8",
+      "confidence": 0.9193,
+      "inputTokens": 569,
+      "elapsedMs": 409
+    },
+    {
+      "caseId": "th-guitar",
+      "repetition": 1,
+      "node": "n_597",
+      "options": 9,
+      "choice": "n_315",
+      "confidence": 0.5201,
+      "inputTokens": 424,
+      "elapsedMs": 410
+    },
+    {
+      "caseId": "th-guitar",
+      "repetition": 1,
+      "node": "n_315",
+      "options": 18,
+      "choice": "n_300",
+      "confidence": 0.9009,
+      "inputTokens": 610,
+      "elapsedMs": 512
+    },
+    {
+      "caseId": "th-guitar",
+      "repetition": 1,
+      "node": "n_300",
+      "options": 13,
+      "choice": "e_1f3b8",
+      "confidence": 0.9059,
+      "inputTokens": 572,
+      "elapsedMs": 614
+    },
+    {
+      "caseId": "en-laptop",
+      "repetition": 1,
+      "node": "n_597",
+      "options": 9,
+      "choice": "n_315",
+      "confidence": 0.7463,
+      "inputTokens": 422,
+      "elapsedMs": 512
+    },
+    {
+      "caseId": "en-laptop",
+      "repetition": 1,
+      "node": "n_315",
+      "options": 18,
+      "choice": "n_302",
+      "confidence": 0.9124,
+      "inputTokens": 608,
+      "elapsedMs": 819
+    },
+    {
+      "caseId": "en-laptop",
+      "repetition": 1,
+      "node": "n_302",
+      "options": 14,
+      "choice": "e_1f4bb",
+      "confidence": 0.8498,
+      "inputTokens": 615,
+      "elapsedMs": 410
+    },
+    {
+      "caseId": "th-laptop",
+      "repetition": 1,
+      "node": "n_597",
+      "options": 9,
+      "choice": "n_315",
+      "confidence": 0.5931,
+      "inputTokens": 433,
+      "elapsedMs": 1139
+    },
+    {
+      "caseId": "th-laptop",
+      "repetition": 1,
+      "node": "n_315",
+      "options": 18,
+      "choice": "n_302",
+      "confidence": 0.9095,
+      "inputTokens": 619,
+      "elapsedMs": 502
+    },
+    {
+      "caseId": "th-laptop",
+      "repetition": 1,
+      "node": "n_302",
+      "options": 14,
+      "choice": "e_1f4bb",
+      "confidence": 0.7902,
+      "inputTokens": 626,
+      "elapsedMs": 309
+    },
+    {
+      "caseId": "en-default",
+      "repetition": 1,
+      "node": "n_597",
+      "options": 9,
+      "choice": "n_261",
+      "confidence": 0.6612,
+      "inputTokens": 425,
+      "elapsedMs": 716
+    },
+    {
+      "caseId": "en-default",
+      "repetition": 1,
+      "node": "n_261",
+      "options": 16,
+      "choice": "n_4",
+      "confidence": 0.2453,
+      "inputTokens": 568,
+      "elapsedMs": 434
+    },
+    {
+      "caseId": "en-default",
+      "repetition": 1,
+      "node": "n_4",
+      "options": 36,
+      "choice": "e_1f44d_1f3ff",
+      "confidence": 0.2272,
+      "inputTokens": 1610,
+      "elapsedMs": 687
+    },
+    {
+      "caseId": "th-default",
+      "repetition": 1,
+      "node": "n_597",
+      "options": 9,
+      "choice": "n_330",
+      "confidence": 0.0602,
+      "inputTokens": 431,
+      "elapsedMs": 617
+    },
+    {
+      "caseId": "th-default",
+      "repetition": 1,
+      "node": "n_330",
+      "options": 14,
+      "choice": "n_326",
+      "confidence": 0.0373,
+      "inputTokens": 534,
+      "elapsedMs": 363
+    },
+    {
+      "caseId": "th-default",
+      "repetition": 1,
+      "node": "n_326",
+      "options": 22,
+      "choice": "e_1f530",
+      "confidence": 0.0404,
+      "inputTokens": 860,
+      "elapsedMs": 351
+    }
+  ],
+  "rubricSha256": "8faca5846ab465e372fe325672566db879095f2d8e018a2a5bb2506ed3bd6845"
+}

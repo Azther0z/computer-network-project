@@ -347,6 +347,7 @@
 
 .receivedMessage,
 .ownMessage {
+  position: relative;
   max-width: min(75%, 520px);
   padding: 12px 14px;
   border-radius: 16px;

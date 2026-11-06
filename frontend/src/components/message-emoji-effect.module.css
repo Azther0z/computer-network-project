@@ -1,0 +1,56 @@
+.action { margin-top: 4px; }
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 3px 7px;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+.button:hover { background: rgb(255 255 255 / 14%); }
+.button:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+.button:disabled { cursor: wait; opacity: 0.65; }
+.error { display: block; margin-top: 4px; font-size: 0.75rem; line-height: 1.4; }
+.burst {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.main {
+  font-size: 3rem;
+  line-height: 1;
+  filter: drop-shadow(0 3px 7px rgb(41 39 37 / 20%));
+  animation: bloom 2s ease-out both;
+}
+.particle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  font-size: 1.4rem;
+  line-height: 1;
+  animation: scatter 1.7s ease-out var(--delay) both;
+}
+@keyframes bloom {
+  0% { transform: scale(0.3); opacity: 0; }
+  20% { transform: scale(1.2); opacity: 1; }
+  38%, 78% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0.9); opacity: 0; }
+}
+@keyframes scatter {
+  0% { transform: translate(-50%, -50%) scale(0.3); opacity: 0; }
+  18% { opacity: 1; }
+  100% { transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y))) scale(0.5); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .main { animation: none; }
+  .particle { display: none; animation: none; }
+}

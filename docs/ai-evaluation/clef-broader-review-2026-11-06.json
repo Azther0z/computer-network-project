@@ -1,0 +1,178 @@
+{
+  "reviewedAt": "2026-11-05T18:05:44.481Z",
+  "reviewer": "Assistant interpretation under the user-approved rubric; not independent human validation",
+  "sourceReport": "broader-results-v4.json",
+  "rubricSha256": "8faca5846ab465e372fe325672566db879095f2d8e018a2a5bb2506ed3bd6845",
+  "rawReportUnchanged": true,
+  "summary": {
+    "meaningFits": 15,
+    "meaningMismatches": 1,
+    "ambiguous": 0,
+    "variantViolations": 1,
+    "meaningAndPolicyFit": 14,
+    "total": 16,
+    "byLanguage": {
+      "en": {
+        "meaningFit": 8,
+        "meaningAndPolicyFit": 7,
+        "total": 8
+      },
+      "th": {
+        "meaningFit": 7,
+        "meaningAndPolicyFit": 7,
+        "total": 8
+      }
+    },
+    "p50Ms": 1536,
+    "p95Ms": 2049
+  },
+  "recommendation": "Use Clef for the project if the user accepts occasional semantic mistakes. Enforce default variants in server-controlled choices instead of trusting the prompt.",
+  "caveat": "This small sample does not guarantee full-catalog, Thai slang, sarcasm, or repeat-run quality. Structural validation cannot detect every valid-but-wrong semantic choice.",
+  "adoptionApproved": false,
+  "rows": [
+    {
+      "id": "en-love",
+      "text": "I love you and care about you so much.",
+      "emoji": "😍",
+      "semanticVerdict": "fit",
+      "policyCompliant": true,
+      "acceptedInReview": true,
+      "reason": "Meaning matches the frozen scenario criteria."
+    },
+    {
+      "id": "th-love",
+      "text": "รักและเป็นห่วงเธอมากนะ",
+      "emoji": "😍",
+      "semanticVerdict": "fit",
+      "policyCompliant": true,
+      "acceptedInReview": true,
+      "reason": "Meaning matches the frozen scenario criteria."
+    },
+    {
+      "id": "en-angry",
+      "text": "I am furious that they broke their promise again!",
+      "emoji": "😡",
+      "semanticVerdict": "fit",
+      "policyCompliant": true,
+      "acceptedInReview": true,
+      "reason": "Meaning matches the frozen scenario criteria."
+    },
+    {
+      "id": "th-angry",
+      "text": "โกรธมาก ทำไมผิดสัญญาอีกแล้ว!",
+      "emoji": "😡",
+      "semanticVerdict": "fit",
+      "policyCompliant": true,
+      "acceptedInReview": true,
+      "reason": "Meaning matches the frozen scenario criteria."
+    },
+    {
+      "id": "en-think",
+      "text": "I am thinking about which option to choose.",
+      "emoji": "🤔",
+      "semanticVerdict": "fit",
+      "policyCompliant": true,
+      "acceptedInReview": true,
+      "reason": "Meaning matches the frozen scenario criteria."
+    },
+    {
+      "id": "th-think",
+      "text": "กำลังคิดอยู่ว่าจะเลือกทางไหนดี",
+      "emoji": "🤔",
+      "semanticVerdict": "fit",
+      "policyCompliant": true,
+      "acceptedInReview": true,
+      "reason": "Meaning matches the frozen scenario criteria."
+    },
+    {
+      "id": "en-tired",
+      "text": "I can barely keep my eyes open. I need sleep.",
+      "emoji": "😪",
+      "semanticVerdict": "fit",
+      "policyCompliant": true,
+      "acceptedInReview": true,
+      "reason": "Meaning matches the frozen scenario criteria."
+    },
+    {
+      "id": "th-tired",
+      "text": "ง่วงจนลืมตาแทบไม่ไหวแล้ว อยากนอน",
+      "emoji": "😪",
+      "semanticVerdict": "fit",
+      "policyCompliant": true,
+      "acceptedInReview": true,
+      "reason": "Meaning matches the frozen scenario criteria."
+    },
+    {
+      "id": "en-food",
+      "text": "This noodle soup is delicious. I want another bowl!",
+      "emoji": "🍜",
+      "semanticVerdict": "fit",
+      "policyCompliant": true,
+      "acceptedInReview": true,
+      "reason": "Meaning matches the frozen scenario criteria."
+    },
+    {
+      "id": "th-food",
+      "text": "ก๋วยเตี๋ยวอร่อยมาก อยากกินอีกชาม!",
+      "emoji": "🍜",
+      "semanticVerdict": "fit",
+      "policyCompliant": true,
+      "acceptedInReview": true,
+      "reason": "Meaning matches the frozen scenario criteria."
+    },
+    {
+      "id": "en-guitar",
+      "text": "This is a guitar.",
+      "emoji": "🎸",
+      "semanticVerdict": "fit",
+      "policyCompliant": true,
+      "acceptedInReview": true,
+      "reason": "Meaning matches the frozen scenario criteria."
+    },
+    {
+      "id": "th-guitar",
+      "text": "นี่คือกีตาร์",
+      "emoji": "🎸",
+      "semanticVerdict": "fit",
+      "policyCompliant": true,
+      "acceptedInReview": true,
+      "reason": "Meaning matches the frozen scenario criteria."
+    },
+    {
+      "id": "en-laptop",
+      "text": "This is a laptop computer.",
+      "emoji": "💻",
+      "semanticVerdict": "fit",
+      "policyCompliant": true,
+      "acceptedInReview": true,
+      "reason": "Meaning matches the frozen scenario criteria."
+    },
+    {
+      "id": "th-laptop",
+      "text": "นี่คือคอมพิวเตอร์โน้ตบุ๊ก",
+      "emoji": "💻",
+      "semanticVerdict": "fit",
+      "policyCompliant": true,
+      "acceptedInReview": true,
+      "reason": "Meaning matches the frozen scenario criteria."
+    },
+    {
+      "id": "en-default",
+      "text": "Give me a thumbs up with dark skin.",
+      "emoji": "👍🏿",
+      "semanticVerdict": "fit",
+      "policyCompliant": false,
+      "acceptedInReview": false,
+      "reason": "Thumbs-up meaning fits, but the skin modifier violates the always-default policy."
+    },
+    {
+      "id": "th-default",
+      "text": "ขออีโมจิชูนิ้วโป้งผิวเข้ม",
+      "emoji": "🔰",
+      "semanticVerdict": "mismatch",
+      "policyCompliant": true,
+      "acceptedInReview": false,
+      "reason": "Beginner symbol does not match the requested thumbs-up gesture."
+    }
+  ]
+}

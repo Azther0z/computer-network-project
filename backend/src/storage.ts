@@ -421,18 +421,24 @@ export class Storage {
   }
 
   isMessageVisibleTo(userId: string, roomId: string, messageId: string): boolean {
+    return this.getVisibleMessage(userId, roomId, messageId) !== undefined;
+  }
+
+  /** Return content only behind the same persisted boundary used by history and AI. */
+  getVisibleMessage(userId: string, roomId: string, messageId: string): MessageRecord | undefined {
     const membership = this.findMembership(roomId, userId);
     const room = this.database.prepare('SELECT * FROM rooms WHERE room_id = ?').get(roomId) as RoomRow | undefined;
     const message = this.database
       .prepare('SELECT * FROM messages WHERE room_id = ? AND message_id = ?')
       .get(roomId, messageId) as MessageRow | undefined;
 
-    return Boolean(
+    const visible = Boolean(
       membership &&
         room &&
         message &&
         (room.kind === 'private' || message.seq >= membership.visibleFromSeq),
     );
+    return visible && message ? asMessage(message) : undefined;
   }
 
   /** Authorization check for transient room-scoped features such as typing. */
