@@ -58,7 +58,7 @@ Planning uses a read-only state identity with `-lock=false`. GitHub concurrency 
 
 ## First merge and owner bootstrap
 
-Keep `GCP_CICD_READY` unset or `false` while reviewing and merging the source. The first merge runs checks and builds a release but does not access GCP. Publish this work through a reviewed pull request; the previous remote revision does not include the uncommitted Saint feature or delivery files.
+Keep `GCP_CICD_READY` unset or `false` while reviewing and merging the source. Main runs checks and builds a release but does not access GCP until delivery is enabled. Merge the separate feature and delivery pull requests before the owner bootstrap. Use the final reviewed `main` revision for setup.
 
 After approval, use a terminal with the Google Cloud CLI authenticated as the project owner. A normal persistent Cloud Shell session also works. Use a fresh clone of the reviewed `main` revision. Run the versioned bootstrap script:
 
