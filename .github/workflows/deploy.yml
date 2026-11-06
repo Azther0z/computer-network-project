@@ -1,0 +1,159 @@
+name: Delivery
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Serialize plan, reviewed apply, and deployment across main revisions.
+concurrency:
+  group: talkmato-production
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  plan:
+    if: github.ref == 'refs/heads/main' && vars.GCP_CICD_READY == 'true'
+    needs: checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: gcp-plan
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      plan_uri: ${{ steps.plan.outputs.plan_uri }}
+      plan_sha: ${{ steps.plan.outputs.plan_sha }}
+      has_changes: ${{ steps.plan.outputs.has_changes }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: '1.17.1'
+          terraform_wrapper: false
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+      - name: Reject an obsolete delivery run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash deploy/require-main.sh
+      - id: auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          project_id: talkmato
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_TF_PLAN_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_lifetime: 3600s
+          create_credentials_file: false
+          export_environment_variables: false
+      - name: Plan and publish a private reviewed artifact
+        id: plan
+        env:
+          GOOGLE_OAUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          CLOUDSDK_CORE_ACCOUNT: ${{ vars.GCP_TF_PLAN_SERVICE_ACCOUNT }}
+          TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+        run: bash deploy/plan.sh
+
+  apply:
+    if: needs.plan.outputs.has_changes == 'true'
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    environment: gcp-infrastructure
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: '1.17.1'
+          terraform_wrapper: false
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+      - name: Reject an obsolete delivery run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash deploy/require-main.sh
+      - id: auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          project_id: talkmato
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_TF_APPLY_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_lifetime: 3600s
+          create_credentials_file: false
+          export_environment_variables: false
+      - name: Apply the exact saved plan with state locking
+        env:
+          GOOGLE_OAUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          CLOUDSDK_CORE_ACCOUNT: ${{ vars.GCP_TF_APPLY_SERVICE_ACCOUNT }}
+          TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+          PLAN_URI: ${{ needs.plan.outputs.plan_uri }}
+          PLAN_SHA: ${{ needs.plan.outputs.plan_sha }}
+        run: bash deploy/apply.sh
+
+  deploy:
+    if: >-
+      always() && !cancelled() && github.ref == 'refs/heads/main' && vars.GCP_CICD_READY == 'true' &&
+      needs.checks.result == 'success' && needs.plan.result == 'success' &&
+      (needs.apply.result == 'success' || needs.apply.result == 'skipped')
+    needs: [checks, plan, apply]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment:
+      name: production
+      url: https://talkmato.azther0z.online
+    permissions:
+      contents: read
+      id-token: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.checks.outputs.artifact_name }}
+          path: ${{ runner.temp }}/release
+      - name: Verify the tested release
+        env:
+          ARCHIVE_SHA256: ${{ needs.checks.outputs.archive_sha256 }}
+        run: |
+          python3 deploy/verify-release.py "$RUNNER_TEMP/release/talkmato-release.tar.gz" \
+            "$ARCHIVE_SHA256" "$GITHUB_SHA" "$RUNNER_TEMP/release/verified"
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+      - name: Reject an obsolete delivery run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash deploy/require-main.sh
+      - id: auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          project_id: talkmato
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_lifetime: 3600s
+          create_credentials_file: false
+          export_environment_variables: false
+      - name: Deploy through IAP and verify public behavior
+        env:
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          CLOUDSDK_CORE_ACCOUNT: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          RELEASE_DIR: ${{ runner.temp }}/release
+          ARCHIVE_SHA256: ${{ needs.checks.outputs.archive_sha256 }}
+        run: bash deploy/publish.sh

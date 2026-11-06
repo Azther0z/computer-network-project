@@ -1,0 +1,26 @@
+[Unit]
+Description=Talkmato Socket.IO backend
+After=network.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=talkmato
+Group=talkmato
+WorkingDirectory=/srv/talkmato/current/backend
+EnvironmentFile=/etc/talkmato/backend.env
+EnvironmentFile=-/etc/talkmato/ai.env
+ExecStart=/srv/talkmato/current/runtime/node --import tsx src/server.ts
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/talkmato
+
+[Install]
+WantedBy=multi-user.target

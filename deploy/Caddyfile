@@ -1,0 +1,9 @@
+talkmato.azther0z.online {
+	@backend path /socket.io /socket.io/* /session /health
+	handle @backend {
+		reverse_proxy 127.0.0.1:8080
+	}
+	handle {
+		reverse_proxy 127.0.0.1:3000
+	}
+}

@@ -23,3 +23,20 @@ Thumbs.db
 # Temporary work
 work/
 *.tmp
+
+# Terraform local cache, state, saved plans, and private input values
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+terraform.tfvars
+terraform.tfvars.json
+*.auto.tfvars
+*.auto.tfvars.json
+crash.log
+crash.*.log
+infra/gcp/.state/
+infra/gcp/.tools/
+__pycache__/
+infra/bootstrap/.state/
+gha-creds-*.json
