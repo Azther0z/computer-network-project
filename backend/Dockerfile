@@ -5,9 +5,7 @@ RUN npm ci
 COPY backend/tsconfig.json ./
 COPY backend/src ./src
 RUN ./node_modules/.bin/tsc --noEmit false --outDir build --rootDir . \
-    && cp src/schema.sql build/src/schema.sql \
-    && mkdir -p build/src/emoji/data \
-    && cp src/emoji/data/emoji-test-17.0.txt build/src/emoji/data/
+    && find src -type f ! -name '*.ts' -exec cp --parents {} build/ \;
 
 FROM node:24.19.0-bookworm-slim@sha256:a9f5f7c91a432850b2a8a7797adf5eadb6c733ceed61167806cee7ea7fbc29df AS runtime
 ENV NODE_ENV=production PORT=8080 DATABASE_PATH=/var/lib/talkmato/talkmato.sqlite
