@@ -1,16 +1,17 @@
 import { requireActor } from '../auth/auth-context.js';
 import { Storage } from '../../database/storage.js';
-import { DomainError, type AuthenticatedActor, type MessageEmoji } from '../../lib/types.js';
+import type { AuthenticatedActor, MessageEmoji } from '../../lib/types.js';
+import { isRecord, RequestError, requestErrorCode, type Acknowledge } from '../../lib/protocol.js';
 import { allowedEmoji } from './catalog.js';
-import { EmojiError, type EmojiSelector } from './clef.js';
+import type { EmojiSelector } from './clef.js';
+import { EmojiError } from './emoji-error.js';
 
-type Ack = (value: { ok: true; data: { emoji: string; attachment: MessageEmoji } } | { ok: false; error: { code: string; message: string } }) => void;
+type EmojiResult = { emoji: string; attachment: MessageEmoji };
 type EmojiSocket = {
   connected: boolean;
   data: { actor?: AuthenticatedActor };
   on(event: string, listener: (...args: unknown[]) => void): void;
 };
-class RequestError extends Error { constructor(readonly code: string) { super(code); } }
 const messages: Record<string, string> = {
   NOT_AUTHENTICATED: 'Sign in before using chat.',
   INVALID_PAYLOAD: 'Select a saved message for the AI effect.',
@@ -20,62 +21,113 @@ const messages: Record<string, string> = {
   AI_INVALID_RESPONSE: 'The AI could not choose a valid emoji. You can try again.',
   AI_RATE_LIMITED: 'Please wait before requesting another AI effect.',
 };
-function input(payload: unknown): { roomId: string; messageId: string } {
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new RequestError('INVALID_PAYLOAD');
+function readEmojiRequest(payload: unknown): { roomId: string; messageId: string } {
+  if (!isRecord(payload)) {
+    throw new RequestError('INVALID_PAYLOAD');
+  }
   const value = payload as Record<string, unknown>;
-  if (Object.keys(value).length !== 2 || ['roomId', 'messageId'].some(key =>
-    typeof value[key] !== 'string' || !value[key] || value[key].length > 128 || value[key] !== value[key].trim())) {
+  if (
+    Object.keys(value).length !== 2 ||
+    ['roomId', 'messageId'].some(
+      (key) =>
+        typeof value[key] !== 'string' ||
+        !value[key] ||
+        value[key].length > 128 ||
+        value[key] !== value[key].trim(),
+    )
+  ) {
     throw new RequestError('INVALID_PAYLOAD');
   }
   return { roomId: value.roomId as string, messageId: value.messageId as string };
 }
 
-/** Persist distinct results before delivery; room channels are never authorization. */
+/** Persist the first result before delivery; room channels are never authorization. */
 export class EmojiEffects {
-  private readonly active = new Set<string>();
-  private readonly activeMessages = new Set<string>();
-  private readonly nextAllowed = new Map<string, number>();
+  private readonly activeUserIds = new Set<string>();
+  private readonly activeMessageIds = new Set<string>();
+  private readonly nextAllowedAtByUserId = new Map<string, number>();
 
-  constructor(private readonly storage: Storage, private readonly selector: EmojiSelector,
+  constructor(
+    private readonly storage: Storage,
+    private readonly selector: EmojiSelector,
     private readonly options: {
-      now?: () => number; cooldownMs?: number; concurrency?: number;
+      now?: () => number;
+      cooldownMs?: number;
+      concurrency?: number;
       emitToUser?: (userId: string, event: string, payload: unknown) => void;
-    } = {}) {}
+    } = {},
+  ) {}
 
-  private begin(userId: string, messageId: string): void {
+  private reserveSelection(userId: string, messageId: string): void {
     const now = (this.options.now ?? Date.now)();
-    for (const [id, expiry] of this.nextAllowed) if (expiry <= now) this.nextAllowed.delete(id);
-    if (this.active.has(userId) || this.activeMessages.has(messageId) || this.active.size >= (this.options.concurrency ?? 2) ||
-        (this.nextAllowed.get(userId) ?? 0) > now) throw new EmojiError('AI_RATE_LIMITED');
-    this.active.add(userId);
-    this.activeMessages.add(messageId);
-    this.nextAllowed.set(userId, now + (this.options.cooldownMs ?? 1_000));
+    for (const [id, expiry] of this.nextAllowedAtByUserId) {
+      if (expiry <= now) {
+        this.nextAllowedAtByUserId.delete(id);
+      }
+    }
+    const accountBusy = this.activeUserIds.has(userId);
+    const messageBusy = this.activeMessageIds.has(messageId);
+    const capacityReached = this.activeUserIds.size >= (this.options.concurrency ?? 2);
+    const coolingDown = (this.nextAllowedAtByUserId.get(userId) ?? 0) > now;
+    if (accountBusy || messageBusy || capacityReached || coolingDown) {
+      throw new EmojiError('AI_RATE_LIMITED');
+    }
+    this.activeUserIds.add(userId);
+    this.activeMessageIds.add(messageId);
+    this.nextAllowedAtByUserId.set(userId, now + (this.options.cooldownMs ?? 1_000));
+  }
+
+  private broadcastAttachment(roomId: string, messageId: string, attachment: MessageEmoji): void {
+    // Delivery channels can be stale. Check each recipient against persisted visibility.
+    for (const member of this.storage.getRoomMembers(roomId)) {
+      if (this.storage.isMessageVisibleTo(member.userId, roomId, messageId)) {
+        this.options.emitToUser?.(member.userId, 'message.emojiAdded', {
+          roomId,
+          messageId,
+          attachment,
+        });
+      }
+    }
   }
 
   register(socket: EmojiSocket): void {
     const pending = new Set<AbortController>();
-    const cancel = () => { for (const controller of pending) controller.abort(); };
+    const cancel = () => {
+      for (const controller of pending) {
+        controller.abort();
+      }
+    };
     socket.on('disconnect', cancel);
     socket.on('auth.logout', cancel);
     socket.on('message.emojiSuggest', async (payload, acknowledgement) => {
-      if (typeof acknowledgement !== 'function') return;
-      const ack = acknowledgement as Ack;
+      if (typeof acknowledgement !== 'function') {
+        return;
+      }
+      const ack = acknowledgement as Acknowledge<EmojiResult>;
       let userId: string | undefined;
       let activeMessageId: string | undefined;
       let controller: AbortController | undefined;
       try {
         const actor = requireActor(socket);
-        if (!socket.connected) throw new RequestError('NOT_AUTHENTICATED');
-        const request = input(payload);
+        if (!socket.connected) {
+          throw new RequestError('NOT_AUTHENTICATED');
+        }
+        const request = readEmojiRequest(payload);
         this.storage.assertMember(actor.userId, request.roomId);
-        const message = this.storage.getVisibleMessage(actor.userId, request.roomId, request.messageId);
-        if (!message) throw new RequestError('MESSAGE_NOT_AVAILABLE');
+        const message = this.storage.getVisibleMessage(
+          actor.userId,
+          request.roomId,
+          request.messageId,
+        );
+        if (!message) {
+          throw new RequestError('MESSAGE_NOT_AVAILABLE');
+        }
         const saved = message.emojis[0];
         if (saved) {
           ack({ ok: true, data: { emoji: saved.emoji, attachment: saved } });
           return;
         }
-        this.begin(actor.userId, request.messageId);
+        this.reserveSelection(actor.userId, request.messageId);
         userId = actor.userId;
         activeMessageId = request.messageId;
         controller = new AbortController();
@@ -87,24 +139,35 @@ export class EmojiEffects {
         if (!this.storage.getVisibleMessage(actor.userId, request.roomId, request.messageId)) {
           throw new RequestError('MESSAGE_NOT_AVAILABLE');
         }
-        if (!allowedEmoji.has(emoji)) throw new EmojiError('AI_INVALID_RESPONSE');
-        const { attachment, created } = this.storage.attachMessageEmoji(actor.userId, request.roomId, request.messageId, emoji);
+        if (!allowedEmoji.has(emoji)) {
+          throw new EmojiError('AI_INVALID_RESPONSE');
+        }
+        const { attachment, created } = this.storage.attachMessageEmoji(
+          actor.userId,
+          request.roomId,
+          request.messageId,
+          emoji,
+        );
         if (created) {
-          for (const member of this.storage.getRoomMembers(request.roomId)) {
-            if (this.storage.isMessageVisibleTo(member.userId, request.roomId, request.messageId)) {
-              this.options.emitToUser?.(member.userId, 'message.emojiAdded', { ...request, attachment });
-            }
-          }
+          this.broadcastAttachment(request.roomId, request.messageId, attachment);
         }
         ack({ ok: true, data: { emoji: attachment.emoji, attachment } });
       } catch (error) {
-        const code = error instanceof EmojiError || error instanceof RequestError || error instanceof DomainError ? error.code :
-          error instanceof Error && error.message === 'NOT_AUTHENTICATED' ? 'NOT_AUTHENTICATED' : 'INTERNAL_ERROR';
-        ack({ ok: false, error: { code, message: messages[code] ?? 'The AI effect could not be completed.' } });
+        const code = requestErrorCode(error);
+        ack({
+          ok: false,
+          error: { code, message: messages[code] ?? 'The AI effect could not be completed.' },
+        });
       } finally {
-        if (userId) this.active.delete(userId);
-        if (activeMessageId) this.activeMessages.delete(activeMessageId);
-        if (controller) pending.delete(controller);
+        if (userId) {
+          this.activeUserIds.delete(userId);
+        }
+        if (activeMessageId) {
+          this.activeMessageIds.delete(activeMessageId);
+        }
+        if (controller) {
+          pending.delete(controller);
+        }
       }
     });
   }

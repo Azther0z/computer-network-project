@@ -8,7 +8,9 @@ export function GroupMemberDetails({ members, selfId }: { members: ChatUser[]; s
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!shown) return;
+    if (!shown) {
+      return;
+    }
     const handlePointerDown = (event: PointerEvent) => {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setShown(false);
@@ -35,7 +37,9 @@ export function GroupMemberDetails({ members, selfId }: { members: ChatUser[]; s
             {selfFirst(members, selfId).map((member) => (
               <li key={member.userId}>
                 <span>{member.name}</span>
-                <small>{member.userId === selfId ? 'You' : member.online ? 'Online' : 'Offline'}</small>
+                <small>
+                  {member.userId === selfId ? 'You' : member.online ? 'Online' : 'Offline'}
+                </small>
               </li>
             ))}
           </ul>

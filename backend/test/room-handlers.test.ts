@@ -55,7 +55,11 @@ function setup() {
   const io = new FakeIo();
   const dependencies = {
     isOnline: (userId: string) => userId === alice.userId || userId === bob.userId,
-    toPublicUser: (user: { userId: string; name: string }) => ({ ...user, online: true }),
+    toPublicUser: (user: { userId: string; name: string }) => ({
+      userId: user.userId,
+      name: user.name,
+      online: true,
+    }),
   };
 
   return { storage, io, dependencies, alice, bob, charlie };
@@ -83,7 +87,9 @@ test('authenticated user opens a private room and emits a committed message once
 
   const opened = socket.trigger('private.open', { peerId: bob.userId });
   assert.equal(opened.ok, true);
-  if (!opened.ok) return;
+  if (!opened.ok) {
+    return;
+  }
   const room = opened.data.room as { roomId: string; members: Array<{ userId: string }> };
   assert.deepEqual(
     room.members.map((member) => member.userId).sort(),
@@ -119,7 +125,9 @@ test('group join handler preserves the storage history boundary', (t) => {
   registerRoomHandlers(aliceSocket, io, storage, dependencies);
   const created = aliceSocket.trigger('group.create', { name: 'Study' });
   assert.equal(created.ok, true);
-  if (!created.ok) return;
+  if (!created.ok) {
+    return;
+  }
   const group = created.data.group as { roomId: string };
 
   aliceSocket.trigger('room.send', {
@@ -141,9 +149,14 @@ test('group join handler preserves the storage history boundary', (t) => {
   });
   const history = bobSocket.trigger('room.history', { roomId: group.roomId });
   assert.equal(history.ok, true);
-  if (!history.ok) return;
+  if (!history.ok) {
+    return;
+  }
   const messages = history.data.messages as Array<{ text: string }>;
-  assert.deepEqual(messages.map((message) => message.text), ['After Bob joins']);
+  assert.deepEqual(
+    messages.map((message) => message.text),
+    ['After Bob joins'],
+  );
 });
 
 test('private rooms cannot be joined as groups', (t) => {
@@ -156,6 +169,8 @@ test('private rooms cannot be joined as groups', (t) => {
 
   const result = socket.trigger('group.join', { roomId: room.roomId });
   assert.equal(result.ok, false);
-  if (result.ok) return;
+  if (result.ok) {
+    return;
+  }
   assert.equal(result.error.code, 'WRONG_ROOM_TYPE');
 });

@@ -1,4 +1,5 @@
 import type { AuthenticatedActor } from '../../lib/types.js';
+import { RequestError } from '../../lib/protocol.js';
 
 type ActorSocket = {
   data: { actor?: AuthenticatedActor };
@@ -12,7 +13,7 @@ export function requireActor(socket: ActorSocket): AuthenticatedActor {
   const actor = socket.data.actor;
 
   if (!actor) {
-    throw new Error('NOT_AUTHENTICATED');
+    throw new RequestError('NOT_AUTHENTICATED', 'Sign in before using chat.');
   }
 
   return actor;

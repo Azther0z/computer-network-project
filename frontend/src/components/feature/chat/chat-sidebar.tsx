@@ -18,8 +18,18 @@ type ChatSidebarProps = {
 };
 
 export function ChatSidebar({
-  selfId, users, privateRooms, groups, activeRoomId, busy, accountBusy,
-  onOpenPrivate, onSelectRoom, onCreateGroup, onDeleteAccount, onLogout,
+  selfId,
+  users,
+  privateRooms,
+  groups,
+  activeRoomId,
+  busy,
+  accountBusy,
+  onOpenPrivate,
+  onSelectRoom,
+  onCreateGroup,
+  onDeleteAccount,
+  onLogout,
 }: ChatSidebarProps) {
   return (
     <aside className={styles.sidebar}>
@@ -27,7 +37,12 @@ export function ChatSidebar({
         <img src="./talkmato-logo.svg" alt="Talkmato logo" />
         <strong>Talkmato</strong>
         <div className={styles.accountActions}>
-          <button type="button" className={styles.signOut} onClick={onLogout} disabled={accountBusy}>
+          <button
+            type="button"
+            className={styles.signOut}
+            onClick={onLogout}
+            disabled={accountBusy}
+          >
             Sign out
           </button>
         </div>
@@ -43,7 +58,8 @@ export function ChatSidebar({
                 onClick={() => onOpenPrivate(user.userId)}
                 disabled={busy || user.userId === selfId}
               >
-                <span className={styles.onlineDot} aria-hidden="true" />{user.name}
+                <span className={styles.onlineDot} aria-hidden="true" />
+                {user.name}
                 {user.userId === selfId && <small>You</small>}
               </button>
             </li>
@@ -82,14 +98,20 @@ export function ChatSidebar({
                 className={activeRoomId === group.roomId ? styles.activeRoom : undefined}
                 onClick={() => onSelectRoom(group.roomId)}
               >
-                <span aria-hidden="true">#</span>{group.name}
+                <span aria-hidden="true">#</span>
+                {group.name}
               </button>
             </li>
           ))}
         </ul>
       </section>
       <div className={styles.sidebarFooter}>
-        <button type="button" className={styles.deleteAccount} onClick={onDeleteAccount} disabled={accountBusy}>
+        <button
+          type="button"
+          className={styles.deleteAccount}
+          onClick={onDeleteAccount}
+          disabled={accountBusy}
+        >
           Delete account
         </button>
       </div>

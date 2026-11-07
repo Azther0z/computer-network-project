@@ -2,44 +2,32 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 
-import { DomainError, type MembershipRecord, type MessageEmoji, type MessageRecord, type RoomRecord, type UserRecord } from '../lib/types.js';
+import {
+  DomainError,
+  type MembershipRecord,
+  type MessageEmoji,
+  type MessageRecord,
+  type RoomRecord,
+  type UserRecord,
+} from '../lib/types.js';
+
+import {
+  userFromRow,
+  roomFromRow,
+  membershipFromRow,
+  messageRecordFromRow,
+  type UserRow,
+  type RoomRow,
+  type MembershipRow,
+  type MessageRow,
+} from './rows.js';
+
+const DEFAULT_HISTORY_LIMIT = 50;
+const MAX_HISTORY_LIMIT = 100;
+const DATABASE_BUSY_TIMEOUT_MS = 5_000;
 
 const schemaPath = new URL('./schema.sql', import.meta.url);
 const schemaSql = readFileSync(schemaPath, 'utf8');
-
-type UserRow = {
-  user_id: string;
-  name: string;
-  canonical_name: string;
-  password_hash: string;
-  created_at: string;
-  deleted_at: string | null;
-};
-
-type RoomRow = {
-  room_id: string;
-  kind: 'private' | 'group';
-  name: string | null;
-  private_pair_key: string | null;
-  created_at: string;
-};
-
-type MembershipRow = {
-  room_id: string;
-  user_id: string;
-  visible_from_seq: number;
-  joined_at: string;
-};
-
-type MessageRow = {
-  seq: number;
-  message_id: string;
-  room_id: string;
-  sender_id: string;
-  client_message_id: string;
-  text: string;
-  sent_at: string;
-};
 
 function now(): string {
   return new Date().toISOString();
@@ -49,56 +37,14 @@ function canonicalPrivatePairKey(firstUserId: string, secondUserId: string): str
   return [firstUserId, secondUserId].sort().join(':');
 }
 
-function asUser(row: UserRow): UserRecord {
-  return {
-    userId: row.user_id,
-    name: row.name,
-    canonicalName: row.canonical_name,
-    passwordHash: row.password_hash,
-    createdAt: row.created_at,
-    deletedAt: row.deleted_at,
-  };
-}
-
-function asRoom(row: RoomRow): RoomRecord {
-  return {
-    roomId: row.room_id,
-    kind: row.kind,
-    name: row.name,
-    privatePairKey: row.private_pair_key,
-    createdAt: row.created_at,
-  };
-}
-
-function asMembership(row: MembershipRow): MembershipRecord {
-  return {
-    roomId: row.room_id,
-    userId: row.user_id,
-    visibleFromSeq: row.visible_from_seq,
-    joinedAt: row.joined_at,
-  };
-}
-
-function asMessage(row: MessageRow, emojis: MessageEmoji[]): MessageRecord {
-  return {
-    seq: row.seq,
-    messageId: row.message_id,
-    roomId: row.room_id,
-    senderId: row.sender_id,
-    clientMessageId: row.client_message_id,
-    text: row.text,
-    sentAt: row.sent_at,
-    emojis,
-  };
-}
-
+/** Owns the single SQLite connection. Durable writes finish before handlers acknowledge them. */
 export class Storage {
   readonly database: DatabaseSync;
 
   constructor(databasePath: string) {
     this.database = new DatabaseSync(databasePath, {
       enableForeignKeyConstraints: true,
-      timeout: 5_000,
+      timeout: DATABASE_BUSY_TIMEOUT_MS,
     });
     this.database.exec(schemaSql);
     this.ensureUserDeletionColumn();
@@ -107,6 +53,8 @@ export class Storage {
   close(): void {
     this.database.close();
   }
+
+  // Accounts and server sessions
 
   createUser(input: {
     userId?: string;
@@ -139,6 +87,69 @@ export class Storage {
     return user;
   }
 
+  getUser(userId: string): UserRecord | undefined {
+    const row = this.database
+      .prepare('SELECT * FROM users WHERE user_id = ? AND deleted_at IS NULL')
+      .get(userId) as UserRow | undefined;
+    return row ? userFromRow(row) : undefined;
+  }
+
+  findUserByCanonicalName(canonicalName: string): UserRecord | undefined {
+    const row = this.database
+      .prepare('SELECT * FROM users WHERE canonical_name = ? AND deleted_at IS NULL')
+      .get(canonicalName) as UserRow | undefined;
+    return row ? userFromRow(row) : undefined;
+  }
+
+  createLoginSession(userId: string, ttlSeconds: number): { sessionId: string; expiresAt: string } {
+    this.requireUser(userId);
+    const sessionId = randomUUID();
+    const createdAt = now();
+    const expiresAt = new Date(Date.now() + ttlSeconds * 1_000).toISOString();
+    this.database
+      .prepare(
+        `INSERT INTO login_sessions (session_id, user_id, expires_at, created_at)
+       VALUES (:sessionId, :userId, :expiresAt, :createdAt)`,
+      )
+      .run({ sessionId, userId, expiresAt, createdAt });
+    return { sessionId, expiresAt };
+  }
+
+  findSessionUser(sessionId: string): UserRecord | undefined {
+    const row = this.database
+      .prepare(
+        `SELECT u.* FROM login_sessions AS s
+       INNER JOIN users AS u ON u.user_id = s.user_id
+       WHERE s.session_id = ? AND s.expires_at > ? AND u.deleted_at IS NULL`,
+      )
+      .get(sessionId, now()) as UserRow | undefined;
+    if (!row) {
+      this.database.prepare('DELETE FROM login_sessions WHERE session_id = ?').run(sessionId);
+    }
+    return row ? userFromRow(row) : undefined;
+  }
+
+  deleteLoginSession(sessionId: string): void {
+    this.database.prepare('DELETE FROM login_sessions WHERE session_id = ?').run(sessionId);
+  }
+
+  deleteAccount(userId: string): void {
+    const user = this.requireUser(userId);
+    this.inTransaction(() => {
+      this.database.prepare('DELETE FROM login_sessions WHERE user_id = ?').run(userId);
+      this.database
+        .prepare(
+          `UPDATE users
+         SET name = '<Unknown>', canonical_name = :deletedCanonicalName,
+             password_hash = '', deleted_at = :deletedAt
+         WHERE user_id = :userId`,
+        )
+        .run({ userId, deletedCanonicalName: `deleted:${user.userId}`, deletedAt: now() });
+    });
+  }
+
+  // Rooms and persisted membership
+
   findOrCreatePrivateRoom(actorId: string, peerId: string): RoomRecord {
     this.requireUser(actorId);
     this.requireUser(peerId);
@@ -159,18 +170,7 @@ export class Storage {
     };
 
     this.inTransaction(() => {
-      this.database
-        .prepare(
-          `INSERT INTO rooms (room_id, kind, name, private_pair_key, created_at)
-           VALUES (:roomId, :kind, :name, :privatePairKey, :createdAt)`,
-        )
-        .run({
-          roomId: room.roomId,
-          kind: room.kind,
-          name: room.name,
-          privatePairKey: room.privatePairKey,
-          createdAt: room.createdAt,
-        });
+      this.insertRoom(room);
       this.insertMembership(room.roomId, actorId, 0);
       this.insertMembership(room.roomId, peerId, 0);
     });
@@ -182,94 +182,7 @@ export class Storage {
     const row = this.database
       .prepare('SELECT * FROM rooms WHERE private_pair_key = ?')
       .get(canonicalPrivatePairKey(firstUserId, secondUserId)) as RoomRow | undefined;
-    return row ? asRoom(row) : undefined;
-  }
-
-  getUser(userId: string): UserRecord | undefined {
-    const row = this.database.prepare('SELECT * FROM users WHERE user_id = ? AND deleted_at IS NULL').get(userId) as UserRow | undefined;
-    return row ? asUser(row) : undefined;
-  }
-
-  findUserByCanonicalName(canonicalName: string): UserRecord | undefined {
-    const row = this.database.prepare('SELECT * FROM users WHERE canonical_name = ? AND deleted_at IS NULL')
-      .get(canonicalName) as UserRow | undefined;
-    return row ? asUser(row) : undefined;
-  }
-
-  createLoginSession(userId: string, ttlSeconds: number): { sessionId: string; expiresAt: string } {
-    this.requireUser(userId);
-    const sessionId = randomUUID();
-    const createdAt = now();
-    const expiresAt = new Date(Date.now() + ttlSeconds * 1_000).toISOString();
-    this.database.prepare(
-      `INSERT INTO login_sessions (session_id, user_id, expires_at, created_at)
-       VALUES (:sessionId, :userId, :expiresAt, :createdAt)`,
-    ).run({ sessionId, userId, expiresAt, createdAt });
-    return { sessionId, expiresAt };
-  }
-
-  findSessionUser(sessionId: string): UserRecord | undefined {
-    const row = this.database.prepare(
-      `SELECT u.* FROM login_sessions AS s
-       INNER JOIN users AS u ON u.user_id = s.user_id
-       WHERE s.session_id = ? AND s.expires_at > ? AND u.deleted_at IS NULL`,
-    ).get(sessionId, now()) as UserRow | undefined;
-    if (!row) this.database.prepare('DELETE FROM login_sessions WHERE session_id = ?').run(sessionId);
-    return row ? asUser(row) : undefined;
-  }
-
-  deleteLoginSession(sessionId: string): void {
-    this.database.prepare('DELETE FROM login_sessions WHERE session_id = ?').run(sessionId);
-  }
-
-  deleteAccount(userId: string): void {
-    const user = this.requireUser(userId);
-    this.inTransaction(() => {
-      this.database.prepare('DELETE FROM login_sessions WHERE user_id = ?').run(userId);
-      this.database.prepare(
-        `UPDATE users
-         SET name = '<Unknown>', canonical_name = :deletedCanonicalName,
-             password_hash = '', deleted_at = :deletedAt
-         WHERE user_id = :userId`,
-      ).run({ userId, deletedCanonicalName: `deleted:${user.userId}`, deletedAt: now() });
-    });
-  }
-
-  listGroups(): RoomRecord[] {
-    return (this.database.prepare("SELECT * FROM rooms WHERE kind = 'group' ORDER BY created_at, room_id")
-      .all() as RoomRow[]).map(asRoom);
-  }
-
-  listMemberRooms(userId: string): RoomRecord[] {
-    return (this.database.prepare(`SELECT r.* FROM rooms r
-      JOIN memberships m ON m.room_id = r.room_id
-      WHERE m.user_id = ? ORDER BY r.created_at, r.room_id`).all(userId) as RoomRow[]).map(asRoom);
-  }
-
-  getRoom(roomId: string): RoomRecord | undefined {
-    const row = this.database.prepare('SELECT * FROM rooms WHERE room_id = ?').get(roomId) as RoomRow | undefined;
-    return row ? asRoom(row) : undefined;
-  }
-
-  getRoomMembers(roomId: string): UserRecord[] {
-    const rows = this.database
-      .prepare(
-        `SELECT u.* FROM users AS u
-         INNER JOIN memberships AS m ON m.user_id = u.user_id
-         WHERE m.room_id = ? AND u.deleted_at IS NULL ORDER BY m.joined_at ASC, u.user_id ASC`,
-      )
-      .all(roomId) as UserRow[];
-    return rows.map(asUser);
-  }
-
-  /** Private-room DTOs retain a deleted peer as <Unknown>; groups omit deleted accounts. */
-  getPrivateRoomMembers(roomId: string): UserRecord[] {
-    const rows = this.database.prepare(
-      `SELECT u.* FROM users AS u
-       INNER JOIN memberships AS m ON m.user_id = u.user_id
-       WHERE m.room_id = ? ORDER BY m.joined_at ASC, u.user_id ASC`,
-    ).all(roomId) as UserRow[];
-    return rows.map(asUser);
+    return row ? roomFromRow(row) : undefined;
   }
 
   createGroup(creatorId: string, name: string): RoomRecord {
@@ -284,18 +197,7 @@ export class Storage {
     };
 
     this.inTransaction(() => {
-      this.database
-        .prepare(
-          `INSERT INTO rooms (room_id, kind, name, private_pair_key, created_at)
-           VALUES (:roomId, :kind, :name, :privatePairKey, :createdAt)`,
-        )
-        .run({
-          roomId: room.roomId,
-          kind: room.kind,
-          name: room.name,
-          privatePairKey: room.privatePairKey,
-          createdAt: room.createdAt,
-        });
+      this.insertRoom(room);
       this.insertMembership(room.roomId, creatorId, 0);
     });
 
@@ -315,29 +217,80 @@ export class Storage {
       return existing;
     }
 
-    let membership: MembershipRecord | undefined;
-    this.inTransaction(() => {
+    return this.inTransaction(() => {
       const current = this.findMembership(roomId, userId);
       if (current) {
-        membership = current;
-        return;
+        return current;
       }
 
+      // Message sequences are global. First join starts after every message already saved.
       const maximum = this.database
         .prepare('SELECT COALESCE(MAX(seq), 0) AS maximum_seq FROM messages')
         .get() as { maximum_seq: number };
-      membership = this.insertMembership(roomId, userId, maximum.maximum_seq + 1);
+      return this.insertMembership(roomId, userId, maximum.maximum_seq + 1);
     });
-
-    return membership!;
   }
 
-  sendMessage(input: {
-    senderId: string;
-    roomId: string;
-    clientMessageId: string;
-    text: string;
-  }): { message: MessageRecord; replayed: boolean } {
+  listGroups(): RoomRecord[] {
+    return (
+      this.database
+        .prepare("SELECT * FROM rooms WHERE kind = 'group' ORDER BY created_at, room_id")
+        .all() as RoomRow[]
+    ).map(roomFromRow);
+  }
+
+  listMemberRooms(userId: string): RoomRecord[] {
+    return (
+      this.database
+        .prepare(
+          `SELECT r.* FROM rooms r
+      JOIN memberships m ON m.room_id = r.room_id
+      WHERE m.user_id = ? ORDER BY r.created_at, r.room_id`,
+        )
+        .all(userId) as RoomRow[]
+    ).map(roomFromRow);
+  }
+
+  getRoom(roomId: string): RoomRecord | undefined {
+    const row = this.database.prepare('SELECT * FROM rooms WHERE room_id = ?').get(roomId) as
+      RoomRow | undefined;
+    return row ? roomFromRow(row) : undefined;
+  }
+
+  getRoomMembers(roomId: string): UserRecord[] {
+    const rows = this.database
+      .prepare(
+        `SELECT u.* FROM users AS u
+         INNER JOIN memberships AS m ON m.user_id = u.user_id
+         WHERE m.room_id = ? AND u.deleted_at IS NULL ORDER BY m.joined_at ASC, u.user_id ASC`,
+      )
+      .all(roomId) as UserRow[];
+    return rows.map(userFromRow);
+  }
+
+  /** Private-room DTOs retain a deleted peer as <Unknown>; groups omit deleted accounts. */
+  getPrivateRoomMembers(roomId: string): UserRecord[] {
+    const rows = this.database
+      .prepare(
+        `SELECT u.* FROM users AS u
+       INNER JOIN memberships AS m ON m.user_id = u.user_id
+       WHERE m.room_id = ? ORDER BY m.joined_at ASC, u.user_id ASC`,
+      )
+      .all(roomId) as UserRow[];
+    return rows.map(userFromRow);
+  }
+
+  /** Authorization check for transient room-scoped features such as typing. */
+  assertMember(userId: string, roomId: string): void {
+    this.requireMembership(roomId, userId);
+  }
+
+  // Messages, history visibility and saved emoji
+
+  sendMessage(input: { senderId: string; roomId: string; clientMessageId: string; text: string }): {
+    message: MessageRecord;
+    replayed: boolean;
+  } {
     this.requireMembership(input.roomId, input.senderId);
 
     const existing = this.database
@@ -346,7 +299,7 @@ export class Storage {
 
     if (existing) {
       if (existing.room_id === input.roomId && existing.text === input.text) {
-        return { message: this.messageFromRow(existing), replayed: true };
+        return { message: this.loadMessageFromRow(existing), replayed: true };
       }
       throw new DomainError(
         'CLIENT_MESSAGE_ID_CONFLICT',
@@ -373,7 +326,7 @@ export class Storage {
       const row = this.database
         .prepare('SELECT * FROM messages WHERE seq = ?')
         .get(Number(result.lastInsertRowid)) as MessageRow;
-      return this.messageFromRow(row);
+      return this.loadMessageFromRow(row);
     });
 
     return { message, replayed: false };
@@ -386,33 +339,34 @@ export class Storage {
   } {
     const membership = this.requireMembership(input.roomId, input.actorId);
     const room = this.requireRoom(input.roomId);
-    const limit = Math.min(Math.max(input.limit ?? 50, 1), 100);
+    const limit = Math.min(Math.max(input.limit ?? DEFAULT_HISTORY_LIMIT, 1), MAX_HISTORY_LIMIT);
     const upperBound = input.beforeSeq ?? Number.MAX_SAFE_INTEGER;
-    const minimum = room.kind === 'group' ? membership.visibleFromSeq : 0;
+    const visibleFromSeq = room.kind === 'group' ? membership.visibleFromSeq : 0;
 
     const rows = this.database
       .prepare(
         `SELECT * FROM messages
-         WHERE room_id = :roomId AND seq >= :minimum AND seq < :upperBound
+         WHERE room_id = :roomId AND seq >= :visibleFromSeq AND seq < :upperBound
          ORDER BY seq DESC LIMIT :limit`,
       )
-      .all({ roomId: input.roomId, minimum, upperBound, limit }) as MessageRow[];
-    const messages = rows.reverse().map(row => this.messageFromRow(row));
+      .all({ roomId: input.roomId, visibleFromSeq, upperBound, limit }) as MessageRow[];
+    const messages = rows.reverse().map((row) => this.loadMessageFromRow(row));
     const oldest = messages[0]?.seq;
     const hasOlder =
       oldest !== undefined &&
       (this.database
         .prepare(
           `SELECT 1 FROM messages
-           WHERE room_id = :roomId AND seq >= :minimum AND seq < :oldest LIMIT 1`,
+           WHERE room_id = :roomId AND seq >= :visibleFromSeq AND seq < :oldest LIMIT 1`,
         )
-        .get({ roomId: input.roomId, minimum, oldest }) as { 1: number } | undefined) !== undefined;
+        .get({ roomId: input.roomId, visibleFromSeq, oldest }) as { 1: number } | undefined) !==
+        undefined;
     const highWatermark = this.database
       .prepare(
         `SELECT COALESCE(MAX(seq), 0) AS maximum_seq
-         FROM messages WHERE room_id = :roomId AND seq >= :minimum`,
+         FROM messages WHERE room_id = :roomId AND seq >= :visibleFromSeq`,
       )
-      .get({ roomId: input.roomId, minimum }) as { maximum_seq: number };
+      .get({ roomId: input.roomId, visibleFromSeq }) as { maximum_seq: number };
 
     return {
       messages,
@@ -428,55 +382,55 @@ export class Storage {
   /** Return content only behind the same persisted boundary used by history and AI. */
   getVisibleMessage(userId: string, roomId: string, messageId: string): MessageRecord | undefined {
     const membership = this.findMembership(roomId, userId);
-    const room = this.database.prepare('SELECT * FROM rooms WHERE room_id = ?').get(roomId) as RoomRow | undefined;
+    const room = this.database.prepare('SELECT * FROM rooms WHERE room_id = ?').get(roomId) as
+      RoomRow | undefined;
     const message = this.database
       .prepare('SELECT * FROM messages WHERE room_id = ? AND message_id = ?')
       .get(roomId, messageId) as MessageRow | undefined;
 
-    const visible = Boolean(
-      membership &&
-        room &&
-        message &&
-        (room.kind === 'private' || message.seq >= membership.visibleFromSeq),
-    );
-    return visible && message ? this.messageFromRow(message) : undefined;
+    if (!membership || !room || !message) {
+      return undefined;
+    }
+    if (room.kind === 'group' && message.seq < membership.visibleFromSeq) {
+      return undefined;
+    }
+    return this.loadMessageFromRow(message);
   }
 
   /** Keep the first saved result, including when another request won the race. */
-  attachMessageEmoji(actorId: string, roomId: string, messageId: string, emoji: string): {
-    attachment: MessageEmoji; created: boolean;
+  attachMessageEmoji(
+    actorId: string,
+    roomId: string,
+    messageId: string,
+    emoji: string,
+  ): {
+    attachment: MessageEmoji;
+    created: boolean;
   } {
     return this.inTransaction(() => {
       this.assertMember(actorId, roomId);
       const message = this.getVisibleMessage(actorId, roomId, messageId);
       if (!message) {
-        throw new DomainError('MESSAGE_NOT_AVAILABLE', 'This message is not available for an AI effect.');
+        throw new DomainError(
+          'MESSAGE_NOT_AVAILABLE',
+          'This message is not available for an AI effect.',
+        );
       }
-      if (message.emojis.length > 0) return { attachment: message.emojis[0], created: false };
-      const result = this.database.prepare(
-        `INSERT INTO message_emojis (emoji_id, message_id, emoji, created_at)
+      if (message.emojis.length > 0) {
+        return { attachment: message.emojis[0], created: false };
+      }
+      const result = this.database
+        .prepare(
+          `INSERT INTO message_emojis (emoji_id, message_id, emoji, created_at)
          VALUES (?, ?, ?, ?) ON CONFLICT (message_id, emoji) DO NOTHING`,
-      ).run(randomUUID(), messageId, emoji, now());
-      const attachment = this.messageEmojis(messageId).find(entry => entry.emoji === emoji)!;
+        )
+        .run(randomUUID(), messageId, emoji, now());
+      const attachment = this.messageEmojis(messageId).find((entry) => entry.emoji === emoji)!;
       return { attachment, created: Number(result.changes) === 1 };
     });
   }
 
-  private messageEmojis(messageId: string): MessageEmoji[] {
-    const rows = this.database.prepare(
-      'SELECT emoji_id, emoji, created_at FROM message_emojis WHERE message_id = ? ORDER BY seq',
-    ).all(messageId) as Array<{ emoji_id: string; emoji: string; created_at: string }>;
-    return rows.map(row => ({ emojiId: row.emoji_id, emoji: row.emoji, createdAt: row.created_at }));
-  }
-
-  private messageFromRow(row: MessageRow): MessageRecord {
-    return asMessage(row, this.messageEmojis(row.message_id));
-  }
-
-  /** Authorization check for transient room-scoped features such as typing. */
-  assertMember(userId: string, roomId: string): void {
-    this.requireMembership(roomId, userId);
-  }
+  // Internal queries and transaction helpers
 
   private requireUser(userId: string): UserRecord {
     const user = this.getUser(userId);
@@ -484,13 +438,6 @@ export class Storage {
       throw new DomainError('USER_NOT_FOUND', 'User was not found.');
     }
     return user;
-  }
-
-  private ensureUserDeletionColumn(): void {
-    const columns = this.database.prepare('PRAGMA table_info(users)').all() as Array<{ name: string }>;
-    if (!columns.some((column) => column.name === 'deleted_at')) {
-      this.database.exec('ALTER TABLE users ADD COLUMN deleted_at TEXT');
-    }
   }
 
   private requireRoom(roomId: string): RoomRecord {
@@ -505,7 +452,7 @@ export class Storage {
     const row = this.database
       .prepare('SELECT * FROM memberships WHERE room_id = ? AND user_id = ?')
       .get(roomId, userId) as MembershipRow | undefined;
-    return row ? asMembership(row) : undefined;
+    return row ? membershipFromRow(row) : undefined;
   }
 
   private requireMembership(roomId: string, userId: string): MembershipRecord {
@@ -517,7 +464,26 @@ export class Storage {
     return membership;
   }
 
-  private insertMembership(roomId: string, userId: string, visibleFromSeq: number): MembershipRecord {
+  private insertRoom(room: RoomRecord): void {
+    this.database
+      .prepare(
+        `INSERT INTO rooms (room_id, kind, name, private_pair_key, created_at)
+       VALUES (:roomId, :kind, :name, :privatePairKey, :createdAt)`,
+      )
+      .run({
+        roomId: room.roomId,
+        kind: room.kind,
+        name: room.name,
+        privatePairKey: room.privatePairKey,
+        createdAt: room.createdAt,
+      });
+  }
+
+  private insertMembership(
+    roomId: string,
+    userId: string,
+    visibleFromSeq: number,
+  ): MembershipRecord {
     const membership: MembershipRecord = { roomId, userId, visibleFromSeq, joinedAt: now() };
     this.database
       .prepare(
@@ -531,6 +497,32 @@ export class Storage {
         joinedAt: membership.joinedAt,
       });
     return membership;
+  }
+
+  private messageEmojis(messageId: string): MessageEmoji[] {
+    const rows = this.database
+      .prepare(
+        'SELECT emoji_id, emoji, created_at FROM message_emojis WHERE message_id = ? ORDER BY seq',
+      )
+      .all(messageId) as Array<{ emoji_id: string; emoji: string; created_at: string }>;
+    return rows.map((row) => ({
+      emojiId: row.emoji_id,
+      emoji: row.emoji,
+      createdAt: row.created_at,
+    }));
+  }
+
+  private loadMessageFromRow(row: MessageRow): MessageRecord {
+    return messageRecordFromRow(row, this.messageEmojis(row.message_id));
+  }
+
+  private ensureUserDeletionColumn(): void {
+    const columns = this.database.prepare('PRAGMA table_info(users)').all() as Array<{
+      name: string;
+    }>;
+    if (!columns.some((column) => column.name === 'deleted_at')) {
+      this.database.exec('ALTER TABLE users ADD COLUMN deleted_at TEXT');
+    }
   }
 
   private inTransaction<T>(work: () => T): T {

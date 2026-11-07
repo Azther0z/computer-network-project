@@ -24,12 +24,12 @@ src/
       chat/                   Chat app and conversation workspace
         emoji/                Saved emoji effects and fireworks
     ui/                       Shared brand component
-  lib/                        Account/chat types, emoji helpers and demo data
+  lib/                        Public data types, command types and pure helpers
 ```
 
-Tests and CSS modules stay beside their related components. Feature-specific hooks stay in the same feature folder. Shared helpers and demo data belong in `lib/`.
+Tests and CSS modules stay beside their related components. Feature-specific hooks stay in the same feature folder. Shared types and pure helpers belong in `lib/`.
 
-`AuthGate` mounts `useAccountAuth` once and passes the authenticated socket, snapshot and guarded request callback to the chat UI. The retained standalone `connection-status.tsx` is a legacy diagnostic component; do not mount it alongside `AuthGate`, because it opens its own connection.
+`AuthGate` mounts `useAccountAuth` once and passes the authenticated socket, snapshot, and guarded request callback to the chat UI. `useConversation` owns room history and live message synchronization. `useRoomTyping` owns temporary typing updates. `ChatWorkspace` composes the views and forms. See the [code reading guide](../docs/code-reading-guide.md) for the presentation walkthrough.
 
 ## Checks
 

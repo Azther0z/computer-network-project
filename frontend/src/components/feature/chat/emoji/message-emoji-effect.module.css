@@ -1,4 +1,6 @@
-.action { display: contents; }
+.action {
+  display: contents;
+}
 .button {
   display: inline-flex;
   align-items: center;
@@ -13,9 +15,17 @@
   font-size: 0.72rem;
   cursor: pointer;
 }
-.button:hover { background: #f5f1ec; }
-.button:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
-.button:disabled { cursor: wait; opacity: 0.65; }
+.button:hover {
+  background: #f5f1ec;
+}
+.button:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+.button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
 .aiButton,
 .choosing,
 .savedEmojis {
@@ -34,8 +44,13 @@
   color: #81766a;
   font-size: 1.2rem;
 }
-.aiButton:hover { color: #c6433d; background: #fff0ed; }
-.failed { color: #a46b26; }
+.aiButton:hover {
+  color: #c6433d;
+  background: #fff0ed;
+}
+.failed {
+  color: #a46b26;
+}
 .failed::after {
   content: '';
   position: absolute;
@@ -46,15 +61,26 @@
   border-radius: 50%;
   background: currentColor;
 }
-.choosing { animation: choosing 1s ease-in-out infinite alternate; }
+.choosing {
+  animation: choosing 1s ease-in-out infinite alternate;
+}
 .savedEmojis {
   display: inline-flex;
   flex-wrap: wrap;
   gap: 5px;
   color: #695e52;
 }
-.savedEmoji { position: relative; display: inline-flex; }
-.savedButton { justify-content: center; width: 32px; height: 32px; padding: 0; font-size: 1.1rem; }
+.savedEmoji {
+  position: relative;
+  display: inline-flex;
+}
+.savedButton {
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  font-size: 1.1rem;
+}
 .burst {
   position: absolute;
   z-index: 2;
@@ -83,19 +109,57 @@
   animation: scatter var(--duration) cubic-bezier(0.15, 0.65, 0.3, 1) var(--delay) both;
 }
 @keyframes bloom {
-  0% { transform: translate(-50%, -50%) scale(0.3); opacity: 0; }
-  20% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
-  38%, 65% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-  100% { transform: translate(-50%, -50%) scale(0.9); opacity: 0; }
+  0% {
+    transform: translate(-50%, -50%) scale(0.3);
+    opacity: 0;
+  }
+  20% {
+    transform: translate(-50%, -50%) scale(1.2);
+    opacity: 1;
+  }
+  38%,
+  65% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(0.9);
+    opacity: 0;
+  }
 }
 @keyframes scatter {
-  0% { transform: translate(calc(-50% + var(--from-x)), calc(-50% + var(--from-y))) scale(0.15) rotate(0deg); opacity: 0; }
-  15%, 40% { opacity: 1; }
-  100% { transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y))) scale(0.5) rotate(var(--rotation)); opacity: 0; }
+  0% {
+    transform: translate(calc(-50% + var(--from-x)), calc(-50% + var(--from-y))) scale(0.15)
+      rotate(0deg);
+    opacity: 0;
+  }
+  15%,
+  40% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y))) scale(0.5)
+      rotate(var(--rotation));
+    opacity: 0;
+  }
 }
-@keyframes choosing { from { opacity: 0.35; } to { opacity: 1; } }
+@keyframes choosing {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
-  .main { animation: none; }
-  .particle { display: none; animation: none; }
-  .choosing { animation: none; }
+  .main {
+    animation: none;
+  }
+  .particle {
+    display: none;
+    animation: none;
+  }
+  .choosing {
+    animation: none;
+  }
 }

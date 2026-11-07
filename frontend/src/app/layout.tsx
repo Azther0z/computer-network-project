@@ -1,15 +1,15 @@
-import type { Metadata } from "next";
-import "./globals.css";
+import type { Metadata } from 'next';
+import './globals.css';
 
 export const metadata: Metadata = {
   icons: {
-    icon: "./talkmato-logo.svg",
+    icon: './talkmato-logo.svg',
   },
-  title: "Talkmato",
-  description: "Small talks, fresh connections.",
+  title: 'Talkmato',
+  description: 'Small talks, fresh connections.',
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
     <html lang="en">
       <body>{children}</body>

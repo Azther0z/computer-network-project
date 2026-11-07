@@ -38,30 +38,6 @@ button {
   line-height: 1.2;
 }
 
-.status {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 36px;
-  color: #595652;
-  font-size: 0.95rem;
-}
-
-.status span {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #79a66a;
-}
-
-.status-offline span {
-  background: #e7473f;
-}
-
-.status-connecting span {
-  background: #e2a13b;
-}
-
 .srOnly {
   position: absolute;
   width: 1px;

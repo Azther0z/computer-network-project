@@ -17,7 +17,7 @@ async function setup(t: TestContext) {
   const io = new Server(http, { transports: ['websocket'] });
   const auth = new AuthPresence(io, storage);
   const typing = new TypingPresence(io, storage);
-  io.on('connection', socket => {
+  io.on('connection', (socket) => {
     auth.register(socket);
     registerRoomHandlers(socket, io, storage, { ...auth, clearTyping: typing.clearTyping });
     typing.register(socket);
@@ -29,16 +29,18 @@ async function setup(t: TestContext) {
   const port = address.port;
   const clients: Socket[] = [];
   t.after(async () => {
-    clients.forEach(client => client.disconnect());
-    await new Promise<void>(resolve => io.close(() => resolve()));
+    clients.forEach((client) => client.disconnect());
+    await new Promise<void>((resolve) => io.close(() => resolve()));
     storage.close();
   });
   async function client() {
     const socket = connect(`http://127.0.0.1:${port}`, {
-      transports: ['websocket'], reconnection: false, forceNew: true,
+      transports: ['websocket'],
+      reconnection: false,
+      forceNew: true,
     });
     clients.push(socket);
-    await new Promise<void>(resolve => socket.once('connect', resolve));
+    await new Promise<void>((resolve) => socket.once('connect', resolve));
     return socket;
   }
   return { storage, io, auth, client };
@@ -49,18 +51,21 @@ async function command(socket: Socket, event: string, payload: unknown = {}) {
 }
 
 function socketEvent<T>(socket: Socket, event: string): Promise<T> {
-  return new Promise(resolve => socket.once(event, resolve));
+  return new Promise((resolve) => socket.once(event, resolve));
 }
 const credentials = { name: 'Alice', password: 'test-password' };
 
-test('register commits an Argon2id account, binds actor and returns public self/online snapshot', async t => {
+test('register commits an Argon2id account, binds actor and returns public self/online snapshot', async (t) => {
   const { storage, io, client } = await setup(t);
   const alice = await client();
   const result = await command(alice, 'auth.register', { ...credentials, name: '  Alice  ' });
   assert.equal(result.ok, true);
   const self = result.data.snapshot.self;
   assert.deepEqual(self, { userId: self.userId, name: 'Alice', online: true });
-  assert.deepEqual(io.sockets.sockets.get(alice.id!)?.data.actor, { userId: self.userId, name: 'Alice' });
+  assert.deepEqual(io.sockets.sockets.get(alice.id!)?.data.actor, {
+    userId: self.userId,
+    name: 'Alice',
+  });
   assert.deepEqual(result.data.snapshot.users, [self]);
   const saved = storage.getUser(self.userId)!;
   assert.match(saved.passwordHash, /^\$argon2id\$/);
@@ -68,16 +73,19 @@ test('register commits an Argon2id account, binds actor and returns public self/
   assert.equal(JSON.stringify(result).includes('password'), false);
 });
 
-test('canonical duplicate names including NFC equivalents are rejected even while offline', async t => {
+test('canonical duplicate names including NFC equivalents are rejected even while offline', async (t) => {
   const { client } = await setup(t);
   const alice = await client();
-  assert.equal((await command(alice, 'auth.register', { ...credentials, name: ' Éclair ' })).ok, true);
+  assert.equal(
+    (await command(alice, 'auth.register', { ...credentials, name: ' Éclair ' })).ok,
+    true,
+  );
   await command(alice, 'auth.logout');
   const duplicate = await command(alice, 'auth.register', { ...credentials, name: 'e\u0301CLAIR' });
   assert.equal(duplicate.error.code, 'NAME_TAKEN');
 });
 
-test('unknown account and incorrect password have identical generic errors', async t => {
+test('unknown account and incorrect password have identical generic errors', async (t) => {
   const { client } = await setup(t);
   const alice = await client();
   await command(alice, 'auth.register', credentials);
@@ -88,7 +96,7 @@ test('unknown account and incorrect password have identical generic errors', asy
   assert.equal(wrong.error.code, 'INVALID_CREDENTIALS');
 });
 
-test('second active login is rejected; logout permits sign-in and removes room delivery access', async t => {
+test('second active login is rejected; logout permits sign-in and removes room delivery access', async (t) => {
   const { client, io, storage } = await setup(t);
   const alice = await client();
   const other = await client();
@@ -97,7 +105,10 @@ test('second active login is rejected; logout permits sign-in and removes room d
   const created = await command(alice, 'group.create', { name: 'Saved group' });
   const roomId = created.data.group.roomId;
   assert.equal((await command(other, 'auth.login', credentials)).error.code, 'SESSION_IN_USE');
-  assert.equal((await command(alice, 'auth.login', credentials)).error.code, 'ALREADY_AUTHENTICATED');
+  assert.equal(
+    (await command(alice, 'auth.login', credentials)).error.code,
+    'ALREADY_AUTHENTICATED',
+  );
   await command(alice, 'auth.logout');
   assert.equal(io.sockets.sockets.get(alice.id!)?.data.actor, undefined);
   assert.equal(io.sockets.sockets.get(alice.id!)?.rooms.has(`room:${roomId}`), false);
@@ -111,7 +122,7 @@ test('second active login is rejected; logout permits sign-in and removes room d
   assert.ok(io.sockets.sockets.get(other.id!)?.rooms.has(`room:${roomId}`));
 });
 
-test('disconnect updates authenticated directories only and preserves rooms, messages and memberships', async t => {
+test('disconnect updates authenticated directories only and preserves rooms, messages and memberships', async (t) => {
   const { client, io, storage, auth } = await setup(t);
   const alice = await client();
   const observer = await client();
@@ -124,13 +135,23 @@ test('disconnect updates authenticated directories only and preserves rooms, mes
   const bobId = b.data.snapshot.self.userId;
   const room = storage.findOrCreatePrivateRoom(aliceId, bobId);
   const group = storage.createGroup(aliceId, 'Public group');
-  storage.sendMessage({ senderId: aliceId, roomId: room.roomId, text: 'Saved', clientMessageId: 'saved' });
+  storage.sendMessage({
+    senderId: aliceId,
+    roomId: room.roomId,
+    text: 'Saved',
+    clientMessageId: 'saved',
+  });
   const disconnected = once(io.sockets.sockets.get(alice.id!)!, 'disconnect');
-  const presence = new Promise<{ users: { name: string }[] }>(resolve => observer.once('users.snapshot', resolve));
+  const presence = new Promise<{ users: { name: string }[] }>((resolve) =>
+    observer.once('users.snapshot', resolve),
+  );
   alice.disconnect();
   await disconnected;
   const snapshot = await presence;
-  assert.deepEqual(snapshot.users.map((u: { name: string }) => u.name), ['Bob']);
+  assert.deepEqual(
+    snapshot.users.map((u: { name: string }) => u.name),
+    ['Bob'],
+  );
   assert.equal(auth.isOnline(aliceId), false);
   assert.equal(guestEvents, 0);
   assert.equal(storage.loadHistory({ actorId: aliceId, roomId: room.roomId }).messages.length, 1);
@@ -142,30 +163,47 @@ test('disconnect updates authenticated directories only and preserves rooms, mes
   assert.equal(login.data.snapshot.groups[0].members[0].userId, aliceId);
 });
 
-test('snapshots show public offline members but exclude unrelated private rooms', async t => {
+test('snapshots show public offline members but exclude unrelated private rooms', async (t) => {
   const { client, storage } = await setup(t);
   const alice = await client();
   const a = await command(alice, 'auth.register', credentials);
   const id = a.data.snapshot.self.userId;
   const bob = storage.createUser({ name: 'Bob', canonicalName: 'bob', passwordHash: 'fixture' });
-  const charlie = storage.createUser({ name: 'Charlie', canonicalName: 'charlie', passwordHash: 'fixture' });
+  const charlie = storage.createUser({
+    name: 'Charlie',
+    canonicalName: 'charlie',
+    passwordHash: 'fixture',
+  });
   storage.findOrCreatePrivateRoom(bob.userId, charlie.userId);
   const shared = storage.findOrCreatePrivateRoom(id, bob.userId);
   const group = storage.createGroup(bob.userId, 'Everyone can see metadata');
   await command(alice, 'auth.logout');
   const login = await command(alice, 'auth.login', credentials);
-  assert.deepEqual(login.data.snapshot.privateRooms.map((r: {roomId: string}) => r.roomId), [shared.roomId]);
-  assert.deepEqual(login.data.snapshot.groups, [{ roomId: group.roomId, kind: 'group', name: group.name,
-    members: [{ userId: bob.userId, name: 'Bob', online: false }] }]);
+  assert.deepEqual(
+    login.data.snapshot.privateRooms.map((r: { roomId: string }) => r.roomId),
+    [shared.roomId],
+  );
+  assert.deepEqual(login.data.snapshot.groups, [
+    {
+      roomId: group.roomId,
+      kind: 'group',
+      name: group.name,
+      members: [{ userId: bob.userId, name: 'Bob', online: false }],
+    },
+  ]);
   assert.equal(JSON.stringify(login).includes('passwordHash'), false);
 });
 
-test('room acknowledgements and account snapshots agree on offline and deleted member data', async t => {
+test('room acknowledgements and account snapshots agree on offline and deleted member data', async (t) => {
   const { client, storage } = await setup(t);
   const alice = await client();
   const registered = await command(alice, 'auth.register', credentials);
   const aliceId = registered.data.snapshot.self.userId;
-  const bob = storage.createUser({ name: 'Bob', canonicalName: 'bob', passwordHash: 'synthetic-hash' });
+  const bob = storage.createUser({
+    name: 'Bob',
+    canonicalName: 'bob',
+    passwordHash: 'synthetic-hash',
+  });
   const group = storage.createGroup(bob.userId, 'Shared group');
   storage.findOrCreatePrivateRoom(aliceId, bob.userId);
 
@@ -175,7 +213,8 @@ test('room acknowledgements and account snapshots agree on offline and deleted m
     { userId: aliceId, name: 'Alice', online: true },
     { userId: bob.userId, name: 'Bob', online: false },
   ];
-  const byId = (left: { userId: string }, right: { userId: string }) => left.userId.localeCompare(right.userId);
+  const byId = (left: { userId: string }, right: { userId: string }) =>
+    left.userId.localeCompare(right.userId);
   assert.deepEqual([...joined.data.group.members].sort(byId), [...expectedMembers].sort(byId));
   assert.deepEqual([...opened.data.room.members].sort(byId), [...expectedMembers].sort(byId));
 
@@ -188,7 +227,9 @@ test('room acknowledgements and account snapshots agree on offline and deleted m
   storage.deleteAccount(bob.userId);
   const reopened = await command(alice, 'private.open', { peerId: bob.userId });
   const rejoined = await command(alice, 'group.join', { roomId: group.roomId });
-  const deletedPeer = reopened.data.room.members.find((member: { userId: string }) => member.userId === bob.userId);
+  const deletedPeer = reopened.data.room.members.find(
+    (member: { userId: string }) => member.userId === bob.userId,
+  );
   assert.deepEqual(deletedPeer, { userId: bob.userId, name: '<Unknown>', online: false });
   assert.deepEqual(rejoined.data.group.members, [expectedMembers[0]]);
   await command(alice, 'auth.logout');
@@ -197,45 +238,62 @@ test('room acknowledgements and account snapshots agree on offline and deleted m
   assert.deepEqual(afterDeletion.data.snapshot.privateRooms, [reopened.data.room]);
 });
 
-test('invalid payloads and Unicode controls are rejected; names count code points', async t => {
+test('invalid payloads and Unicode controls are rejected; names count code points', async (t) => {
   const { client } = await setup(t);
   const socket = await client();
-  for (const payload of [null, [], {}, { ...credentials, name: '\u0000Alice' },
-    { ...credentials, name: 'a'.repeat(33) }, { ...credentials, password: 'short' },
-    { ...credentials, password: 'a'.repeat(129) }]) {
+  for (const payload of [
+    null,
+    [],
+    {},
+    { ...credentials, name: '\u0000Alice' },
+    { ...credentials, name: 'a'.repeat(33) },
+    { ...credentials, password: 'short' },
+    { ...credentials, password: 'a'.repeat(129) },
+  ]) {
     assert.equal((await command(socket, 'auth.register', payload)).error.code, 'INVALID_PAYLOAD');
   }
-  assert.equal((await command(socket, 'auth.register', { ...credentials, name: '🍅'.repeat(32) })).ok, true);
+  assert.equal(
+    (await command(socket, 'auth.register', { ...credentials, name: '🍅'.repeat(32) })).ok,
+    true,
+  );
 });
 
-test('simultaneous canonical registrations produce exactly one account and one success', async t => {
+test('simultaneous canonical registrations produce exactly one account and one success', async (t) => {
   const { client } = await setup(t);
   const a = await client();
   const b = await client();
-  const results = await Promise.all([command(a, 'auth.register', credentials), command(b, 'auth.register', credentials)]);
-  assert.equal(results.filter(r => r.ok).length, 1);
-  assert.equal(results.find(r => !r.ok).error.code, 'NAME_TAKEN');
+  const results = await Promise.all([
+    command(a, 'auth.register', credentials),
+    command(b, 'auth.register', credentials),
+  ]);
+  assert.equal(results.filter((r) => r.ok).length, 1);
+  assert.equal(results.find((r) => !r.ok).error.code, 'NAME_TAKEN');
 });
 
-test('concurrent valid logins cannot both claim an offline account', async t => {
+test('concurrent valid logins cannot both claim an offline account', async (t) => {
   const { client } = await setup(t);
   const owner = await client();
   await command(owner, 'auth.register', credentials);
   await command(owner, 'auth.logout');
   const peer = await client();
-  const results = await Promise.all([command(owner, 'auth.login', credentials), command(peer, 'auth.login', credentials)]);
-  assert.equal(results.filter(r => r.ok).length, 1);
-  assert.equal(results.find(r => !r.ok).error.code, 'SESSION_IN_USE');
+  const results = await Promise.all([
+    command(owner, 'auth.login', credentials),
+    command(peer, 'auth.login', credentials),
+  ]);
+  assert.equal(results.filter((r) => r.ok).length, 1);
+  assert.equal(results.find((r) => !r.ok).error.code, 'SESSION_IN_USE');
 });
 
-test('disconnect during password hashing cannot bind a ghost user or commit registration', async t => {
+test('disconnect during password hashing cannot bind a ghost user or commit registration', async (t) => {
   const { client, io, auth, storage } = await setup(t);
   const socket = await client();
   const server = io.sockets.sockets.get(socket.id!)!;
-  const received = new Promise<void>(resolve => server.once('auth.register', () => {
-    server.disconnect(true);
-    resolve();
-  }));
+  const received = new Promise<void>((resolve) =>
+    server.once('auth.register', () => {
+      server.disconnect(true);
+      resolve();
+    }),
+  );
   socket.emit('auth.register', credentials, () => {});
   await received;
   // Wait for all work on the native hash worker pool to finish, without a timing-based sleep.
@@ -246,7 +304,7 @@ test('disconnect during password hashing cannot bind a ghost user or commit regi
   assert.equal(storage.findUserByCanonicalName('alice'), undefined);
 });
 
-test('opening a new private room joins both live participants and delivers to both', async t => {
+test('opening a new private room joins both live participants and delivers to both', async (t) => {
   const { client } = await setup(t);
   const alice = await client();
   const bob = await client();
@@ -254,20 +312,31 @@ test('opening a new private room joins both live participants and delivers to bo
   const bobLogin = await command(bob, 'auth.register', { ...credentials, name: 'Bob' });
   assert.equal(aliceLogin.ok, true);
   assert.equal(bobLogin.ok, true);
-  if (!aliceLogin.ok || !bobLogin.ok) return;
+  if (!aliceLogin.ok || !bobLogin.ok) {
+    return;
+  }
 
   const privateOpenedForBob = socketEvent<{ room: { roomId: string } }>(bob, 'private.opened');
-  const opened = await command(alice, 'private.open', { peerId: bobLogin.data.snapshot.self.userId });
+  const opened = await command(alice, 'private.open', {
+    peerId: bobLogin.data.snapshot.self.userId,
+  });
   assert.equal(opened.ok, true);
-  if (!opened.ok) return;
+  if (!opened.ok) {
+    return;
+  }
   const roomId = opened.data.room.roomId as string;
   const privateEvent = await privateOpenedForBob;
   assert.equal(privateEvent.room.roomId, roomId);
 
-  const deliveredToAlice = socketEvent<{ messageId: string; roomId: string }>(alice, 'message.created');
+  const deliveredToAlice = socketEvent<{ messageId: string; roomId: string }>(
+    alice,
+    'message.created',
+  );
   const deliveredToBob = socketEvent<{ messageId: string; roomId: string }>(bob, 'message.created');
   const sent = await command(alice, 'room.send', {
-    roomId, clientMessageId: 'private-live-delivery', text: 'Hello Bob',
+    roomId,
+    clientMessageId: 'private-live-delivery',
+    text: 'Hello Bob',
   });
   assert.equal(sent.ok, true);
   const [aliceMessage, bobMessage] = await Promise.all([deliveredToAlice, deliveredToBob]);
@@ -275,29 +344,43 @@ test('opening a new private room joins both live participants and delivers to bo
   assert.equal(bobMessage.messageId, aliceMessage.messageId);
 });
 
-test('creating and joining groups refreshes the authenticated group directory', async t => {
+test('creating and joining groups refreshes the authenticated group directory', async (t) => {
   const { client } = await setup(t);
   const alice = await client();
   const bob = await client();
   await command(alice, 'auth.register', credentials);
   await command(bob, 'auth.register', { ...credentials, name: 'Bob' });
 
-  const visibleToBob = socketEvent<{ groups: Array<{ roomId: string; members: unknown[] }> }>(bob, 'groups.snapshot');
+  const visibleToBob = socketEvent<{ groups: Array<{ roomId: string; members: unknown[] }> }>(
+    bob,
+    'groups.snapshot',
+  );
   const created = await command(alice, 'group.create', { name: 'Study group' });
   assert.equal(created.ok, true);
-  if (!created.ok) return;
+  if (!created.ok) {
+    return;
+  }
   const roomId = created.data.group.roomId as string;
   const directoryAfterCreate = await visibleToBob;
-  assert.equal(directoryAfterCreate.groups.find(group => group.roomId === roomId)?.members.length, 1);
+  assert.equal(
+    directoryAfterCreate.groups.find((group) => group.roomId === roomId)?.members.length,
+    1,
+  );
 
-  const visibleToAlice = socketEvent<{ groups: Array<{ roomId: string; members: unknown[] }> }>(alice, 'groups.snapshot');
+  const visibleToAlice = socketEvent<{ groups: Array<{ roomId: string; members: unknown[] }> }>(
+    alice,
+    'groups.snapshot',
+  );
   const joined = await command(bob, 'group.join', { roomId });
   assert.equal(joined.ok, true);
   const directoryAfterJoin = await visibleToAlice;
-  assert.equal(directoryAfterJoin.groups.find(group => group.roomId === roomId)?.members.length, 2);
+  assert.equal(
+    directoryAfterJoin.groups.find((group) => group.roomId === roomId)?.members.length,
+    2,
+  );
 });
 
-test('typing is room-scoped, member-only and clears explicitly', async t => {
+test('typing is room-scoped, member-only and clears explicitly', async (t) => {
   const { client } = await setup(t);
   const alice = await client();
   const bob = await client();
@@ -307,28 +390,44 @@ test('typing is room-scoped, member-only and clears explicitly', async t => {
   await command(charlie, 'auth.register', { ...credentials, name: 'Charlie' });
   assert.equal(aliceLogin.ok, true);
   assert.equal(bobLogin.ok, true);
-  if (!aliceLogin.ok || !bobLogin.ok) return;
-  const opened = await command(alice, 'private.open', { peerId: bobLogin.data.snapshot.self.userId });
+  if (!aliceLogin.ok || !bobLogin.ok) {
+    return;
+  }
+  const opened = await command(alice, 'private.open', {
+    peerId: bobLogin.data.snapshot.self.userId,
+  });
   assert.equal(opened.ok, true);
-  if (!opened.ok) return;
+  if (!opened.ok) {
+    return;
+  }
   const roomId = opened.data.room.roomId as string;
 
   const shownToBob = socketEvent<{ roomId: string; isTyping: boolean }>(bob, 'typing.updated');
   assert.equal((await command(alice, 'typing.set', { roomId, isTyping: true })).ok, true);
-  assert.deepEqual(await shownToBob, { roomId, userId: aliceLogin.data.snapshot.self.userId, isTyping: true, expiresInMs: 3_000 });
-  assert.equal((await command(charlie, 'typing.set', { roomId, isTyping: true })).error.code, 'NOT_MEMBER');
+  assert.deepEqual(await shownToBob, {
+    roomId,
+    userId: aliceLogin.data.snapshot.self.userId,
+    isTyping: true,
+    expiresInMs: 3_000,
+  });
+  assert.equal(
+    (await command(charlie, 'typing.set', { roomId, isTyping: true })).error.code,
+    'NOT_MEMBER',
+  );
 
   const clearedForBob = socketEvent<{ roomId: string; isTyping: boolean }>(bob, 'typing.updated');
   assert.equal((await command(alice, 'typing.set', { roomId, isTyping: false })).ok, true);
   assert.equal((await clearedForBob).isTyping, false);
 });
 
-test('an unexpired server session restores a new socket without browser-held credentials', async t => {
+test('an unexpired server session restores a new socket without browser-held credentials', async (t) => {
   const { client, io, auth, storage } = await setup(t);
   const alice = await client();
   const registered = await command(alice, 'auth.register', credentials);
   assert.equal(registered.ok, true);
-  if (!registered.ok) return;
+  if (!registered.ok) {
+    return;
+  }
   const room = storage.createGroup(registered.data.snapshot.self.userId, 'Saved group');
   const session = storage.createLoginSession(registered.data.snapshot.self.userId, 8 * 60 * 60);
   const disconnected = once(io.sockets.sockets.get(alice.id!)!, 'disconnect');
@@ -343,7 +442,7 @@ test('an unexpired server session restores a new socket without browser-held cre
   assert.equal(auth.isOnline(registered.data.snapshot.self.userId), true);
 });
 
-test('account deletion revokes access, anonymizes prior messages and frees the name', async t => {
+test('account deletion revokes access, anonymizes prior messages and frees the name', async (t) => {
   const { client, storage } = await setup(t);
   const alice = await client();
   const bob = await client();
@@ -351,12 +450,20 @@ test('account deletion revokes access, anonymizes prior messages and frees the n
   const bobLogin = await command(bob, 'auth.register', { ...credentials, name: 'Bob' });
   assert.equal(aliceLogin.ok, true);
   assert.equal(bobLogin.ok, true);
-  if (!aliceLogin.ok || !bobLogin.ok) return;
+  if (!aliceLogin.ok || !bobLogin.ok) {
+    return;
+  }
   const room = await command(alice, 'private.open', { peerId: bobLogin.data.snapshot.self.userId });
   assert.equal(room.ok, true);
-  if (!room.ok) return;
+  if (!room.ok) {
+    return;
+  }
   const roomId = room.data.room.roomId as string;
-  await command(alice, 'room.send', { roomId, clientMessageId: 'before-deletion', text: 'Keep this message' });
+  await command(alice, 'room.send', {
+    roomId,
+    clientMessageId: 'before-deletion',
+    text: 'Keep this message',
+  });
   const session = storage.createLoginSession(aliceLogin.data.snapshot.self.userId, 60 * 60);
 
   const deleted = await command(alice, 'auth.deleteAccount', { password: credentials.password });
@@ -365,9 +472,26 @@ test('account deletion revokes access, anonymizes prior messages and frees the n
   assert.equal(storage.findSessionUser(session.sessionId), undefined);
   const history = await command(bob, 'room.history', { roomId });
   assert.equal(history.ok, true);
-  if (!history.ok) return;
-  assert.equal((history.data.messages as Array<{ senderName: string }>)[0]?.senderName, '<Unknown>');
+  if (!history.ok) {
+    return;
+  }
+  assert.equal(
+    (history.data.messages as Array<{ senderName: string }>)[0]?.senderName,
+    '<Unknown>',
+  );
 
   const replacement = await client();
   assert.equal((await command(replacement, 'auth.register', credentials)).ok, true);
+});
+
+test('authentication without an acknowledgement cannot create an account or bind a socket', async (t) => {
+  const { client, storage, io } = await setup(t);
+  const socket = await client();
+  socket.emit('auth.register', credentials);
+  // Socket.IO preserves event order. The following acknowledged command runs after the ignored write.
+  const login = await command(socket, 'auth.login', credentials);
+  assert.equal(login.ok, false);
+  assert.equal(login.error.code, 'INVALID_CREDENTIALS');
+  assert.equal(storage.findUserByCanonicalName('alice'), undefined);
+  assert.equal(io.sockets.sockets.get(socket.id!)?.data.actor, undefined);
 });

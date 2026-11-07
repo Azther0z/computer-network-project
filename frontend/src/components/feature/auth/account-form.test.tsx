@@ -20,12 +20,18 @@ test('registration requires matching passwords and clears password fields after 
   const submit = vi.fn().mockResolvedValue(undefined);
   render(<RegisterForm {...base} onSubmit={submit} />);
   fireEvent.change(screen.getByLabelText('Username'), { target: { value: ' Alice ' } });
-  fireEvent.change(screen.getByLabelText('Password', { exact: true }), { target: { value: 'test-password' } });
-  fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'different-password' } });
+  fireEvent.change(screen.getByLabelText('Password', { exact: true }), {
+    target: { value: 'test-password' },
+  });
+  fireEvent.change(screen.getByLabelText('Confirm password'), {
+    target: { value: 'different-password' },
+  });
   fireEvent.submit(screen.getByRole('form', { name: 'Register' }));
   expect(submit).not.toHaveBeenCalled();
   expect(screen.getByRole('alert').textContent).toContain('Passwords do not match');
-  fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'test-password' } });
+  fireEvent.change(screen.getByLabelText('Confirm password'), {
+    target: { value: 'test-password' },
+  });
   fireEvent.submit(screen.getByRole('form', { name: 'Register' }));
   expect(submit).toHaveBeenCalledWith('Alice', 'test-password');
   expect((screen.getByLabelText('Password', { exact: true }) as HTMLInputElement).value).toBe('');

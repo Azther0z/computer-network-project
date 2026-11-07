@@ -1,12 +1,12 @@
 'use client';
 
-import { FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-
-import type { AccountSnapshot, Ack } from '@/lib/account-types';
-import type { ChatMessage, GroupRoom, MessageEmoji, MessageEmojiAdded, PrivateRoom } from '@/lib/chat-types';
-import { isMessageEmoji, mergeMessageEmojis } from '../../../lib/message-emojis';
-import type { AccountAuth } from '@/components/feature/auth/use-account-auth';
+import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from 'react';
+import type { PendingMessage } from '../../../lib/chat-protocol';
+import { mergeMessageEmojis } from '../../../lib/message-emojis';
 import { roomTitle, selfFirst } from '../../../lib/room-display';
+import type { SignedInAccount } from '../auth/use-account-auth';
+import { useConversation } from './use-conversation';
+import { useRoomTyping } from './use-room-typing';
 
 import styles from './chat-workspace.module.css';
 import { ChatSidebar } from './chat-sidebar';
@@ -14,284 +14,107 @@ import { GroupMemberDetails } from './group-member-details';
 import { ChatMessageRow } from './chat-message-row';
 import { CreateGroupDialog, DeleteAccountDialog } from './account-dialogs';
 
-type SignedInAccount = AccountAuth & {
-  snapshot: AccountSnapshot;
-  socket: NonNullable<AccountAuth['socket']>;
-};
-type Room = PrivateRoom | GroupRoom;
-type HistoryPage = { roomId: string; messages: ChatMessage[] };
-type SendResult = { message: ChatMessage; replayed: boolean };
-type PrivateOpenResult = { room: PrivateRoom };
-type GroupResult = { group: Omit<GroupRoom, 'joined'> };
-type PendingMessage = { roomId: string; text: string; clientMessageId: string };
-type TypingUpdate = { roomId: string; userId: string; isTyping: boolean };
-
-function asJoinedGroup(group: Omit<GroupRoom, 'joined'>, selfId: string): GroupRoom {
-  return { ...group, joined: group.members.some((member) => member.userId === selfId) };
-}
-
-function mergeByRoomId<T extends { roomId: string }>(current: T[], incoming: T[]): T[] {
-  const rooms = new Map(current.map((room) => [room.roomId, room]));
-  for (const room of incoming) rooms.set(room.roomId, room);
-  return [...rooms.values()];
-}
-
-function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]): ChatMessage[] {
-  const messages = new Map(current.map((message) => [message.messageId, message]));
-  for (const message of incoming) {
-    const previous = messages.get(message.messageId);
-    messages.set(message.messageId, { ...message, emojis: mergeMessageEmojis(previous?.emojis ?? [], message.emojis ?? []) });
-  }
-  return [...messages.values()].sort((left, right) => (left.seq ?? 0) - (right.seq ?? 0));
-}
-
-function errorMessage(response: Ack<unknown>): string {
-  if (response.ok) return '';
-  const messages: Record<string, string> = {
-    NOT_MEMBER: 'Join this group before viewing or sending messages.',
-    USER_OFFLINE: 'That person is no longer online.',
-    CLIENT_MESSAGE_ID_CONFLICT: 'This message retry conflicts with an earlier message.',
-    INVALID_PAYLOAD: 'Please check the information and try again.',
-  };
-  return messages[response.error.code] ?? 'That chat request could not be completed. Please try again.';
-}
-
-/** Uses the authenticated Socket.IO connection supplied by AuthGate; it never opens one. */
+/** Composes chat views and local form state around the authenticated connection. */
 export function ChatWorkspace({ account }: { account: SignedInAccount }) {
   const { snapshot, socket } = account;
-  const requestRef = useRef(account.request);
-  requestRef.current = account.request;
-  const [privateRooms, setPrivateRooms] = useState<PrivateRoom[]>(snapshot.privateRooms);
-  const [groups, setGroups] = useState<GroupRoom[]>(() =>
-    snapshot.groups.map((group) => asJoinedGroup(group, snapshot.self.userId)),
-  );
-  const [messagesByRoom, setMessagesByRoom] = useState<Record<string, ChatMessage[]>>({});
-  // Keep attachments that arrive before their history page, or while another room is open.
-  const [liveEmojis, setLiveEmojis] = useState<Record<string, MessageEmoji[]>>({});
-  const seenEmojiIds = useRef(new Set<string>());
-  const [fireworkTarget, setFireworkTarget] = useState<HTMLDivElement | null>(null);
-  const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
+  const {
+    privateRooms,
+    groups,
+    activeRoomId,
+    activeRoom,
+    activeMessages,
+    isGroupPreview,
+    liveEmojis,
+    busy,
+    loadingRoomId,
+    error,
+    pendingMessage,
+    selectRoom,
+    openPrivate,
+    joinGroup,
+    createGroup,
+    sendMessageWithId,
+    rememberEmoji,
+  } = useConversation(account);
   const [draft, setDraft] = useState('');
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [groupName, setGroupName] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [loadingRoomId, setLoadingRoomId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [pendingMessage, setPendingMessage] = useState<PendingMessage | null>(null);
-  const [typingByRoom, setTypingByRoom] = useState<Record<string, string[]>>({});
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const typingRoomRef = useRef<string | null>(null);
-  const lastTypingUpdateRef = useRef(0);
+  const seenEmojiIds = useRef(new Set<string>());
+  const [fireworkTarget, setFireworkTarget] = useState<HTMLDivElement | null>(null);
   const messageAreaRef = useRef<HTMLElement>(null);
-
-  const rememberEmoji = useCallback(({ messageId, attachment }: MessageEmojiAdded) => {
-    if (!isMessageEmoji(attachment)) return;
-    setLiveEmojis(current => ({ ...current, [messageId]: mergeMessageEmojis(current[messageId] ?? [], [attachment]) }));
-  }, []);
-
-  const sendTyping = useCallback((roomId: string, isTyping: boolean) => {
-    const now = Date.now();
-    if (isTyping && typingRoomRef.current === roomId && now - lastTypingUpdateRef.current < 500) return;
-    if (isTyping) {
-      typingRoomRef.current = roomId;
-      lastTypingUpdateRef.current = now;
-    } else if (typingRoomRef.current === roomId) {
-      typingRoomRef.current = null;
-    }
-    void requestRef.current('typing.set', { roomId, isTyping }).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    setPrivateRooms((current) => mergeByRoomId(current, snapshot.privateRooms));
-    setGroups((current) => mergeByRoomId(
-      current,
-      snapshot.groups.map((group) => asJoinedGroup(group, snapshot.self.userId)),
-    ));
-  }, [snapshot.groups, snapshot.privateRooms, snapshot.self.userId]);
-
-  useEffect(() => {
-    const privateOpened = ({ room }: PrivateOpenResult) => {
-      setPrivateRooms((current) => mergeByRoomId(current, [room]));
-    };
-    const messageCreated = (message: ChatMessage) => {
-      setMessagesByRoom((current) => ({
-        ...current,
-        [message.roomId]: mergeMessages(current[message.roomId] ?? [], [message]),
-      }));
-    };
-    const typingUpdated = ({ roomId, userId, isTyping }: TypingUpdate) => {
-      setTypingByRoom((current) => {
-        const users = new Set(current[roomId] ?? []);
-        if (isTyping) users.add(userId); else users.delete(userId);
-        return { ...current, [roomId]: [...users] };
-      });
-    };
-    socket.on('private.opened', privateOpened);
-    socket.on('private.updated', privateOpened);
-    socket.on('message.created', messageCreated);
-    socket.on('message.emojiAdded', rememberEmoji);
-    socket.on('typing.updated', typingUpdated);
-    return () => {
-      socket.off('private.opened', privateOpened);
-      socket.off('private.updated', privateOpened);
-      socket.off('message.created', messageCreated);
-      socket.off('message.emojiAdded', rememberEmoji);
-      socket.off('typing.updated', typingUpdated);
-    };
-  }, [socket, rememberEmoji]);
-
-  const rooms = useMemo<Room[]>(() => [...privateRooms, ...groups], [groups, privateRooms]);
-  const activeRoom = rooms.find((room) => room.roomId === activeRoomId) ?? null;
-  const isGroupPreview = activeRoom?.kind === 'group' && !activeRoom.joined;
-  const activeMessages = activeRoomId === null ? [] : messagesByRoom[activeRoomId] ?? [];
-  const typingNames = activeRoom === null ? [] : (typingByRoom[activeRoom.roomId] ?? [])
-    .filter((userId) => userId !== snapshot.self.userId)
-    .map((userId) => activeRoom.members.find((member) => member.userId === userId)?.name)
-    .filter((name): name is string => name !== undefined);
-
-  useEffect(() => () => {
-    const roomId = typingRoomRef.current;
-    if (roomId) sendTyping(roomId, false);
-  }, [activeRoom?.roomId, sendTyping]);
-
-  useEffect(() => {
-    if (!activeRoom || isGroupPreview || !draft.trim()) {
-      const roomId = typingRoomRef.current;
-      if (roomId) sendTyping(roomId, false);
-      return;
-    }
-    sendTyping(activeRoom.roomId, true);
-    const refresh = window.setInterval(() => sendTyping(activeRoom.roomId, true), 1_000);
-    return () => window.clearInterval(refresh);
-  }, [activeRoom, draft, isGroupPreview, sendTyping]);
+  const { typingNames, stopTyping } = useRoomTyping({
+    socket,
+    request: account.request,
+    room: activeRoom,
+    selfId: snapshot.self.userId,
+    draft,
+    enabled: !isGroupPreview,
+  });
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
-      if (messageAreaRef.current) messageAreaRef.current.scrollTop = messageAreaRef.current.scrollHeight;
+      if (messageAreaRef.current) {
+        messageAreaRef.current.scrollTop = messageAreaRef.current.scrollHeight;
+      }
     });
     return () => window.cancelAnimationFrame(frame);
   }, [activeRoomId, activeMessages]);
 
-  useEffect(() => {
-    if (!activeRoom || isGroupPreview) return;
-    let cancelled = false;
-    setLoadingRoomId(activeRoom.roomId);
-    setError(null);
-    void requestRef.current<HistoryPage>('room.history', { roomId: activeRoom.roomId })
-      .then((response) => {
-        if (cancelled) return;
-        if (!response.ok) {
-          setError(errorMessage(response));
-          return;
-        }
-        setMessagesByRoom((current) => ({
-          ...current,
-          [response.data.roomId]: mergeMessages(current[response.data.roomId] ?? [], response.data.messages),
-        }));
-      })
-      .catch(() => { if (!cancelled) setError('Connection changed. Sign in again before using chat.'); })
-      .finally(() => { if (!cancelled) setLoadingRoomId(null); });
-    return () => { cancelled = true; };
-  }, [activeRoom, isGroupPreview]);
-
-  async function openPrivate(peerId: string): Promise<void> {
-    if (peerId === snapshot.self.userId || busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const response = await requestRef.current<PrivateOpenResult>('private.open', { peerId });
-      if (!response.ok) { setError(errorMessage(response)); return; }
-      setPrivateRooms((current) => mergeByRoomId(current, [response.data.room]));
-      setActiveRoomId(response.data.room.roomId);
-    } catch {
-      setError('Connection changed. Sign in again before using chat.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function joinGroup(group: GroupRoom): Promise<void> {
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const response = await requestRef.current<GroupResult>('group.join', { roomId: group.roomId });
-      if (!response.ok) { setError(errorMessage(response)); return; }
-      setGroups((current) => mergeByRoomId(current, [asJoinedGroup(response.data.group, snapshot.self.userId)]));
-    } catch {
-      setError('Connection changed. Sign in again before using chat.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function sendWithId(message: PendingMessage): Promise<void> {
-    setBusy(true);
-    setError(null);
-    try {
-      const response = await requestRef.current<SendResult>('room.send', message);
-      if (!response.ok) { setError(errorMessage(response)); return; }
-      setMessagesByRoom((current) => ({
-        ...current,
-        [message.roomId]: mergeMessages(current[message.roomId] ?? [], [response.data.message]),
-      }));
-      setPendingMessage(null);
+  async function sendAndClearDraft(message: PendingMessage): Promise<void> {
+    if (await sendMessageWithId(message)) {
       setDraft('');
-    } catch {
-      setPendingMessage(message);
-      setError('The send result was not confirmed. You can retry it manually.');
-    } finally {
-      setBusy(false);
     }
   }
 
-  function submitMessage(): void {
+  function submitDraft(): void {
     const text = draft.trim();
-    if (!activeRoom || isGroupPreview || !text || busy) return;
-    sendTyping(activeRoom.roomId, false);
-    void sendWithId({ roomId: activeRoom.roomId, text, clientMessageId: crypto.randomUUID() });
+    if (!activeRoom || isGroupPreview || !text || busy) {
+      return;
+    }
+    stopTyping();
+    void sendAndClearDraft({
+      roomId: activeRoom.roomId,
+      text,
+      clientMessageId: crypto.randomUUID(),
+    });
   }
 
-  function sendMessage(event: FormEvent<HTMLFormElement>): void {
+  function submitMessageForm(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
-    submitMessage();
+    submitDraft();
   }
 
   function handleMessageKeyDown(event: KeyboardEvent<HTMLTextAreaElement>): void {
-    if (event.key !== 'Enter' || event.shiftKey) return;
+    if (event.key !== 'Enter' || event.shiftKey) {
+      return;
+    }
     event.preventDefault();
-    submitMessage();
+    submitDraft();
   }
 
-  async function createGroup(event: FormEvent<HTMLFormElement>): Promise<void> {
+  async function submitGroupForm(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
-    const name = groupName.trim();
-    if (!name || busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const response = await requestRef.current<GroupResult>('group.create', { name });
-      if (!response.ok) { setError(errorMessage(response)); return; }
-      const group = asJoinedGroup(response.data.group, snapshot.self.userId);
-      setGroups((current) => mergeByRoomId(current, [group]));
-      setActiveRoomId(group.roomId);
+    if (await createGroup(groupName.trim())) {
       setGroupName('');
       setShowCreateGroup(false);
-    } catch {
-      setError('Connection changed. Sign in again before using chat.');
-    } finally {
-      setBusy(false);
     }
   }
 
   async function removeAccount(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
-    if (busy || !deletePassword) return;
+    if (busy || !deletePassword) {
+      return;
+    }
     setDeleteError(null);
     const deleted = await account.deleteAccount(deletePassword);
-    if (!deleted) setDeleteError(account.error ?? 'Could not delete the account. Check your password and try again.');
+    if (!deleted) {
+      setDeleteError(
+        account.error ?? 'Could not delete the account. Check your password and try again.',
+      );
+    }
   }
 
   return (
@@ -305,23 +128,39 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
         busy={busy}
         accountBusy={account.busy}
         onOpenPrivate={(userId) => void openPrivate(userId)}
-        onSelectRoom={setActiveRoomId}
+        onSelectRoom={selectRoom}
         onCreateGroup={() => setShowCreateGroup(true)}
-        onDeleteAccount={() => { setDeleteError(null); setShowDeleteAccount(true); }}
+        onDeleteAccount={() => {
+          setDeleteError(null);
+          setShowDeleteAccount(true);
+        }}
         onLogout={() => void account.logout()}
       />
 
       <main className={styles.conversation}>
         <div ref={setFireworkTarget} className={styles.fireworkLayer} data-firework-layer="" />
-        {error && <p className={styles.error} role="alert">{error}</p>}
+        {error && (
+          <p className={styles.error} role="alert">
+            {error}
+          </p>
+        )}
         {pendingMessage && (
-          <button type="button" className={styles.retry} disabled={busy} onClick={() => void sendWithId(pendingMessage)}>
+          <button
+            type="button"
+            className={styles.retry}
+            disabled={busy}
+            onClick={() => void sendAndClearDraft(pendingMessage)}
+          >
             Retry last message
           </button>
         )}
         {!activeRoom && (
           <div className={styles.emptyState}>
-            <img className={styles.emptyStateIcon} src="./chat-conversation-icon.svg" alt="Chat icon" />
+            <img
+              className={styles.emptyStateIcon}
+              src="./chat-conversation-icon.svg"
+              alt="Chat icon"
+            />
             <h1>Choose a conversation</h1>
             <p>Select a person or group to open a room.</p>
           </div>
@@ -334,10 +173,14 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
                 <h1>{roomTitle(activeRoom, snapshot.self.userId)}</h1>
               </div>
               {activeRoom.kind === 'group' && (
-                <GroupMemberDetails key={activeRoom.roomId} members={activeRoom.members} selfId={snapshot.self.userId} />
+                <GroupMemberDetails
+                  key={activeRoom.roomId}
+                  members={activeRoom.members}
+                  selfId={snapshot.self.userId}
+                />
               )}
             </header>
-            {isGroupPreview ? (
+            {activeRoom.kind === 'group' && isGroupPreview ? (
               <section className={styles.groupPreview}>
                 <h2>Join to see the conversation</h2>
                 <p>Members are visible before joining. Earlier messages remain private.</p>
@@ -349,7 +192,9 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
                     ))}
                   </ul>
                 </div>
-                <button type="button" onClick={() => void joinGroup(activeRoom)} disabled={busy}>Join group</button>
+                <button type="button" onClick={() => void joinGroup(activeRoom)} disabled={busy}>
+                  Join group
+                </button>
               </section>
             ) : (
               <>
@@ -359,7 +204,9 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
                     aria-label="Messages"
                     aria-busy={loadingRoomId === activeRoom.roomId}
                   >
-                    {loadingRoomId === activeRoom.roomId && <li className={styles.noMessages}>Loading messages…</li>}
+                    {loadingRoomId === activeRoom.roomId && (
+                      <li className={styles.noMessages}>Loading messages…</li>
+                    )}
                     {loadingRoomId !== activeRoom.roomId && activeMessages.length === 0 && (
                       <li className={styles.noMessages}>No messages yet.</li>
                     )}
@@ -370,20 +217,34 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
                         selfId={snapshot.self.userId}
                         isGroup={activeRoom.kind === 'group'}
                         request={account.request}
-                        attachments={mergeMessageEmojis(message.emojis ?? [], liveEmojis[message.messageId] ?? [])}
+                        attachments={mergeMessageEmojis(
+                          message.emojis,
+                          liveEmojis[message.messageId] ?? [],
+                        )}
                         seenEmojiIds={seenEmojiIds.current}
                         fireworkTarget={fireworkTarget}
-                        onAttachment={(attachment) => rememberEmoji({ roomId: activeRoom.roomId, messageId: message.messageId, attachment })}
+                        onAttachment={(attachment) =>
+                          rememberEmoji({
+                            roomId: activeRoom.roomId,
+                            messageId: message.messageId,
+                            attachment,
+                          })
+                        }
                       />
                     ))}
                   </ol>
                   <p className={styles.typingStatus} aria-live="polite">
-                    {typingNames.length === 1 ? `${typingNames[0]} is typing…`
-                      : typingNames.length > 1 ? `${typingNames.join(', ')} are typing…` : ''}
+                    {typingNames.length === 1
+                      ? `${typingNames[0]} is typing…`
+                      : typingNames.length > 1
+                        ? `${typingNames.join(', ')} are typing…`
+                        : ''}
                   </p>
                 </section>
-                <form className={styles.composer} onSubmit={sendMessage}>
-                  <label className="srOnly" htmlFor="message-draft">Message {roomTitle(activeRoom, snapshot.self.userId)}</label>
+                <form className={styles.composer} onSubmit={submitMessageForm}>
+                  <label className="srOnly" htmlFor="message-draft">
+                    Message {roomTitle(activeRoom, snapshot.self.userId)}
+                  </label>
                   <textarea
                     id="message-draft"
                     value={draft}
@@ -393,7 +254,12 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
                     rows={2}
                     disabled={busy || loadingRoomId === activeRoom.roomId}
                   />
-                  <button type="submit" disabled={busy || loadingRoomId === activeRoom.roomId || !draft.trim()}>Send</button>
+                  <button
+                    type="submit"
+                    disabled={busy || loadingRoomId === activeRoom.roomId || !draft.trim()}
+                  >
+                    Send
+                  </button>
                 </form>
               </>
             )}
@@ -406,7 +272,7 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
           name={groupName}
           busy={busy}
           onNameChange={setGroupName}
-          onSubmit={createGroup}
+          onSubmit={submitGroupForm}
           onCancel={() => setShowCreateGroup(false)}
         />
       )}

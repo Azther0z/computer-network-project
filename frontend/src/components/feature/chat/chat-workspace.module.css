@@ -10,15 +10,6 @@
   box-shadow: 0 20px 70px rgb(41 39 37 / 12%);
 }
 
-.previewNotice {
-  grid-column: 1 / -1;
-  padding: 10px 20px;
-  color: #695e52;
-  background: #fff0df;
-  font-size: 0.85rem;
-  text-align: center;
-}
-
 .sidebar {
   display: flex;
   flex-direction: column;
@@ -297,11 +288,33 @@
   font-size: 0.88rem;
 }
 
-.memberPopover > strong { color: #403b36; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; }
-.memberPopover ul { display: grid; gap: 9px; padding: 10px 0 0; list-style: none; }
-.memberPopover li { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
-.memberPopover li span { min-width: 0; overflow-wrap: anywhere; }
-.memberPopover small { flex: none; color: #81766a; font-size: 0.78rem; }
+.memberPopover > strong {
+  color: #403b36;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.memberPopover ul {
+  display: grid;
+  gap: 9px;
+  padding: 10px 0 0;
+  list-style: none;
+}
+.memberPopover li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+.memberPopover li span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.memberPopover small {
+  flex: none;
+  color: #81766a;
+  font-size: 0.78rem;
+}
 
 .error {
   position: absolute;
@@ -350,7 +363,9 @@
   -webkit-overflow-scrolling: touch;
 }
 
-.messagesEmpty { align-content: center; }
+.messagesEmpty {
+  align-content: center;
+}
 
 .typingStatus {
   min-height: 24px;
@@ -365,12 +380,19 @@
 }
 
 @keyframes typingPulse {
-  0%, 100% { opacity: 0.45; }
-  50% { opacity: 1; }
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .typingStatus:not(:empty) { animation: none; }
+  .typingStatus:not(:empty) {
+    animation: none;
+  }
 }
 
 .messageRow {
@@ -396,7 +418,9 @@
   justify-items: end;
 }
 
-.groupMessageRow { --content-row: 2; }
+.groupMessageRow {
+  --content-row: 2;
+}
 
 .messageSender {
   grid-column: var(--bubble-column, 1);

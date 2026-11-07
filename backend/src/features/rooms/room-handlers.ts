@@ -1,5 +1,12 @@
 import { requireActor } from '../auth/auth-context.js';
 import { Storage } from '../../database/storage.js';
+import {
+  expectObject,
+  expectString,
+  RequestError,
+  roomChannel,
+  type Acknowledge,
+} from '../../lib/protocol.js';
 import { toPublicRoom, type PublicUser } from '../../lib/public-room.js';
 import {
   DomainError,
@@ -7,12 +14,6 @@ import {
   type MessageRecord,
   type UserRecord,
 } from '../../lib/types.js';
-
-type Ack = (response: AckResponse<unknown>) => void;
-
-type AckResponse<T> =
-  | { ok: true; data: T }
-  | { ok: false; error: { code: string; message: string } };
 
 type RoomSocket = {
   data: { actor?: AuthenticatedActor };
@@ -24,44 +25,8 @@ type RoomBroadcaster = {
   to(channel: string): { emit(event: string, payload: unknown): void };
 };
 
-class RequestError extends Error {
-  constructor(
-    public readonly code:
-      | 'INVALID_PAYLOAD'
-      | 'SELF_CHAT_NOT_ALLOWED'
-      | 'NOT_AUTHENTICATED'
-      | 'USER_OFFLINE',
-    message: string,
-  ) {
-    super(message);
-    this.name = 'RequestError';
-  }
-}
-
-function roomChannel(roomId: string): string {
-  return `room:${roomId}`;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function expectString(value: unknown, field: string): string {
-  if (typeof value !== 'string') {
-    throw new RequestError('INVALID_PAYLOAD', `${field} must be a string.`);
-  }
-  return value;
-}
-
-function expectObject(value: unknown): Record<string, unknown> {
-  if (!isRecord(value)) {
-    throw new RequestError('INVALID_PAYLOAD', 'Payload must be an object.');
-  }
-  return value;
-}
-
-function expectAck(value: unknown): Ack | undefined {
-  return typeof value === 'function' ? (value as Ack) : undefined;
+function expectAck(value: unknown): Acknowledge | undefined {
+  return typeof value === 'function' ? (value as Acknowledge) : undefined;
 }
 
 type RoomHandlerDependencies = {
@@ -82,11 +47,11 @@ const defaultDependencies: RoomHandlerDependencies = {
   clearTyping: () => {},
 };
 
-function asMessage(message: MessageRecord, senderName: string) {
+function messageWithSenderName(message: MessageRecord, senderName: string) {
   return { ...message, senderName };
 }
 
-function acknowledge<T>(ack: Ack | undefined, work: () => T): void {
+function acknowledge<T>(ack: Acknowledge | undefined, work: () => T): void {
   if (!ack) {
     return;
   }
@@ -104,9 +69,6 @@ function toProtocolError(error: unknown): { code: string; message: string } {
   }
   if (error instanceof DomainError || error instanceof RequestError) {
     return { code: error.code, message: error.message };
-  }
-  if (error instanceof Error && error.message === 'NOT_AUTHENTICATED') {
-    return { code: 'NOT_AUTHENTICATED', message: 'Sign in before using chat.' };
   }
   return { code: 'INTERNAL_ERROR', message: 'The request could not be completed.' };
 }
@@ -129,7 +91,10 @@ export function registerRoomHandlers(
       const input = expectObject(payload);
       const peerId = expectString(input.peerId, 'peerId');
       if (peerId === actor.userId) {
-        throw new RequestError('SELF_CHAT_NOT_ALLOWED', 'You cannot open a private chat with yourself.');
+        throw new RequestError(
+          'SELF_CHAT_NOT_ALLOWED',
+          'You cannot open a private chat with yourself.',
+        );
       }
 
       const existing = storage.findPrivateRoom(actor.userId, peerId);
@@ -198,7 +163,7 @@ export function registerRoomHandlers(
       }
 
       const result = storage.sendMessage({ senderId: actor.userId, roomId, clientMessageId, text });
-      const message = asMessage(result.message, actor.name);
+      const message = messageWithSenderName(result.message, actor.name);
       dependencies.clearTyping(actor.userId, roomId);
       if (!result.replayed) {
         io.to(roomChannel(roomId)).emit('message.created', message);
@@ -214,9 +179,14 @@ export function registerRoomHandlers(
       const roomId = expectString(input.roomId, 'roomId');
       const beforeSeq = input.beforeSeq === undefined ? undefined : Number(input.beforeSeq);
       const limit = input.limit === undefined ? undefined : Number(input.limit);
-      if ((beforeSeq !== undefined && (!Number.isInteger(beforeSeq) || beforeSeq < 1)) ||
-          (limit !== undefined && (!Number.isInteger(limit) || limit < 1))) {
-        throw new RequestError('INVALID_PAYLOAD', 'History cursor and limit must be positive integers.');
+      if (
+        (beforeSeq !== undefined && (!Number.isInteger(beforeSeq) || beforeSeq < 1)) ||
+        (limit !== undefined && (!Number.isInteger(limit) || limit < 1))
+      ) {
+        throw new RequestError(
+          'INVALID_PAYLOAD',
+          'History cursor and limit must be positive integers.',
+        );
       }
 
       const page = storage.loadHistory({ actorId: actor.userId, roomId, beforeSeq, limit });
@@ -224,7 +194,7 @@ export function registerRoomHandlers(
         roomId,
         messages: page.messages.map((message) => {
           const sender = storage.getUser(message.senderId);
-          return asMessage(message, sender?.name ?? '<Unknown>');
+          return messageWithSenderName(message, sender?.name ?? '<Unknown>');
         }),
         nextBeforeSeq: page.nextBeforeSeq,
         highWatermarkSeq: page.highWatermarkSeq,

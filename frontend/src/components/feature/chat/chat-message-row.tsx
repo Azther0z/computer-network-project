@@ -22,7 +22,14 @@ function displayTime(value: string): string {
 }
 
 export function ChatMessageRow({
-  message, selfId, isGroup, request, attachments, seenEmojiIds, fireworkTarget, onAttachment,
+  message,
+  selfId,
+  isGroup,
+  request,
+  attachments,
+  seenEmojiIds,
+  fireworkTarget,
+  onAttachment,
 }: ChatMessageRowProps) {
   const own = message.senderId === selfId;
   const showSender = !own && isGroup;

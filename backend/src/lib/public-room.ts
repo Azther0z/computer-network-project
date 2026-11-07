@@ -16,9 +16,10 @@ export function toPublicRoom(
   room: RoomRecord,
   toPublicUser: (user: UserRecord) => PublicUser,
 ): PublicRoom {
-  const members = room.kind === 'private'
-    ? storage.getPrivateRoomMembers(room.roomId)
-    : storage.getRoomMembers(room.roomId);
+  const members =
+    room.kind === 'private'
+      ? storage.getPrivateRoomMembers(room.roomId)
+      : storage.getRoomMembers(room.roomId);
 
   return {
     roomId: room.roomId,

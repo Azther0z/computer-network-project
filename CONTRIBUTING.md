@@ -2,7 +2,8 @@
 
 This is a proposed workflow for review at the first team meeting. Roles and review rules are not settled.
 Read the [requirements](docs/requirements.md) before planning a task. Keep changes tied to requirement IDs when applicable.
-The repository currently contains documentation and source evidence. It has no application build or test suite.
+The repository contains a Next.js frontend, a Socket.IO backend, and tests for both applications.
+Start with the [code reading guide](docs/code-reading-guide.md) to follow the main application flows before changing them.
 
 ## Proposed workflow
 

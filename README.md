@@ -61,7 +61,9 @@ AGENTS.md
 
 Run the backend and frontend separately with `npm install` and `npm run dev` in each directory. Development uses Node 24.19.0. The default backend is `http://localhost:8080`, with frontend origin `http://localhost:3000`; see the `.env.example` files for configuration.
 
-`AuthGate` mounts one `useAccountAuth` hook. A client wrapper can supply a render callback receiving `snapshot`, `socket`, `request`, and `logout` for the conversation UI. `request(event, payload)` refuses disconnected/unauthenticated calls and uses acknowledgement timeouts without buffering or write retries. A successful sign-in creates an eight-hour HTTP-only cookie session; refresh/reconnect restores it only while valid, and Sign out revokes it. Account snapshots contain all public groups (including offline members) and only the signed-in user's private rooms. The existing `NEXT_PUBLIC_DEMO_CHAT=true` route remains an explicitly labeled, isolated preview.
+`AuthGate` mounts one `useAccountAuth` hook. A client wrapper supplies the authenticated account to the conversation UI. `request(event, payload)` refuses disconnected/unauthenticated calls and uses acknowledgement timeouts without buffering or write retries. A successful sign-in creates an eight-hour HTTP-only cookie session; refresh/reconnect restores it only while valid, and Sign out revokes it. Account snapshots contain all public groups (including offline members) and only the signed-in user's private rooms.
+
+For the team presentation, use the [code reading guide](docs/code-reading-guide.md). It traces account sign-in, private and group chat, persistence, typing, and the AI effect through the source files and their tests.
 
 Backend checks: `npm run typecheck && npm test`. Frontend checks: `npm test && npm run lint && npm run build`. Authentication tests use real Argon2id hashes and WebSocket clients against in-memory SQLite; frontend hook tests cover gated commands, sign-out, transport loss, stale acknowledgements and generic errors.
 
