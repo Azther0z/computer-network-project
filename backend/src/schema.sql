@@ -47,6 +47,15 @@ CREATE TABLE IF NOT EXISTS login_sessions (
   created_at TEXT NOT NULL
 ) STRICT;
 
+CREATE TABLE IF NOT EXISTS message_emojis (
+  seq INTEGER PRIMARY KEY,
+  emoji_id TEXT NOT NULL UNIQUE,
+  message_id TEXT NOT NULL REFERENCES messages(message_id) ON DELETE CASCADE,
+  emoji TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE (message_id, emoji)
+) STRICT;
+
 CREATE INDEX IF NOT EXISTS messages_by_room_seq
   ON messages (room_id, seq);
 

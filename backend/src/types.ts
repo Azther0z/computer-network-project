@@ -29,6 +29,12 @@ export interface MembershipRecord {
   joinedAt: string;
 }
 
+export interface MessageEmoji {
+  emojiId: string;
+  emoji: string;
+  createdAt: string;
+}
+
 export interface MessageRecord {
   seq: number;
   messageId: string;
@@ -37,6 +43,7 @@ export interface MessageRecord {
   clientMessageId: string;
   text: string;
   sentAt: string;
+  emojis: MessageEmoji[];
 }
 
 export class DomainError extends Error {
@@ -46,6 +53,7 @@ export class DomainError extends Error {
       | 'WRONG_ROOM_TYPE'
       | 'NOT_MEMBER'
       | 'USER_NOT_FOUND'
+      | 'MESSAGE_NOT_AVAILABLE'
       | 'CLIENT_MESSAGE_ID_CONFLICT',
     message: string,
   ) {

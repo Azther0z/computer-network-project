@@ -11,7 +11,7 @@ A tomato-themed browser chat application for the Computer Networks term project.
 - Create groups, view members, and choose which groups to join.
 - Group messages are visible only to members.
 - Sign in to restore the same identity, group memberships and saved chat history.
-- Planned extras: room-scoped typing indicators and an AI-selected emoji firework; cloud deployment remains optional.
+- Room-scoped typing indicators and an AI-selected emoji firework for a selected message.
 
 ## Stack
 
@@ -46,7 +46,7 @@ README.md
 AGENTS.md
 ```
 
-**Status:** SQLite storage, Socket.IO room/message handlers, account authentication and live presence are implemented. The default page has registration/sign-in and live account directories. The conversation UI remains a separate preview; its live integration, typing and AI are pending. Cloud hosting is not selected.
+**Status:** The live conversation UI, accounts, persistent history, room-scoped typing, and Saint's Clef emoji effect are implemented locally. AI credentials remain server-side and are optional for core chat. Public deployment and the two-physical-computer demonstration remain pending.
 
 ## Authentication integration
 
@@ -57,3 +57,13 @@ Run the backend and frontend separately with `npm install` and `npm run dev` in 
 Backend checks: `npm run typecheck && npm test`. Frontend checks: `npm test && npm run lint && npm run build`. Authentication tests use real Argon2id hashes and WebSocket clients against in-memory SQLite; frontend hook tests cover gated commands, sign-out, transport loss, stale acknowledgements and generic errors.
 
 See the [implementation ownership plan](docs/implementation-ownership.md), [core implementation checklist](docs/core-implementation-checklist.md), [requirements](docs/requirements.md), [architecture](docs/architecture.md) and [UI design](docs/ui-ux.md).
+
+## AI emoji effect
+
+Select the diamond beside a saved message: it sits to the right of received bubbles and to the left of sent bubbles. The server authorizes the selected message, asks Cloudflare Clef for an emoji once, saves it, and delivers the attachment to connected members who can read that message. The action disappears immediately while choosing and stays removed for everyone once a result is saved, including after refresh. Later requests reuse the first saved result without calling Clef. Previously saved multi-emoji messages retain all their attachments. Saved emojis return with message history after refresh, sign-in or server restart.
+
+Saved emoji buttons replace the diamond in the same position beside the message bubble. Each attachment plays a brief firework across the conversation pane on its first appearance in the current chat session, with fresh random sizes, positions, travel, rotation and timing on every play. The overlay stays separate from message scrolling and does not block clicking or typing. Clicking a saved emoji replays locally without another AI call or broadcast. Switching rooms or receiving the same attachment again does not automatically replay it. Reduced motion shows a still emoji. Failures offer manual retry without generating a replacement.
+
+The backend reads `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_AUTH_TOKEN` from its private process environment. Supply them through your local environment or server-side secret configuration, then start the backend normally. Keep them out of browser variables, URLs and Git. Without credentials, core chat still works and AI requests return `AI_UNAVAILABLE`.
+
+The curated set of 240 emojis is bundled in `backend/src/emoji/catalog-data.ts` and uses default yellow and gender-neutral forms where available. Each selection sends the entire subset in one Clef Choice question, within its 255-option limit. Clef is instructed to choose 🍅 for unclear or unmatched messages. A structurally valid response with an unrecognized choice also becomes 🍅; malformed responses, timeouts and provider failures still show a retryable error. The implementation does not guarantee that every valid emoji matches the message meaning. See the [WebSocket protocol](docs/websocket-protocol.md) for request limits and authorization rules.

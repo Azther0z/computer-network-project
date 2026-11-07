@@ -43,8 +43,8 @@ Every new Socket.IO connection starts unauthenticated. Alice signs in again, rec
   {"direction":"client.emit","event":"private.open","payload":{"peerId":"u-b"}},
   {"direction":"ack","payload":{"ok":true,"data":{"room":{"roomId":"p-ab","kind":"private","members":[{"userId":"u-a","name":"Alice","online":true},{"userId":"u-b","name":"Bob","online":true}]}}}},
   {"direction":"client.emit","event":"room.send","payload":{"roomId":"p-ab","clientMessageId":"3c6ecf68-96d3-4ac1-9588-23e3bb105e12","text":"Hello Bob"}},
-  {"direction":"ack","payload":{"ok":true,"data":{"message":{"seq":101,"messageId":"m-101","clientMessageId":"3c6ecf68-96d3-4ac1-9588-23e3bb105e12","roomId":"p-ab","senderId":"u-a","senderName":"Alice","text":"Hello Bob","sentAt":"2026-11-04T09:00:00Z"},"replayed":false}}},
-  {"direction":"server.emit","event":"message.created","payload":{"seq":101,"messageId":"m-101","clientMessageId":"3c6ecf68-96d3-4ac1-9588-23e3bb105e12","roomId":"p-ab","senderId":"u-a","senderName":"Alice","text":"Hello Bob","sentAt":"2026-11-04T09:00:00Z"},"recipients":["u-a","u-b"]}
+  {"direction":"ack","payload":{"ok":true,"data":{"message":{"seq":101,"messageId":"m-101","clientMessageId":"3c6ecf68-96d3-4ac1-9588-23e3bb105e12","roomId":"p-ab","senderId":"u-a","senderName":"Alice","text":"Hello Bob","sentAt":"2026-11-04T09:00:00Z","emojis":[]},"replayed":false}}},
+  {"direction":"server.emit","event":"message.created","payload":{"seq":101,"messageId":"m-101","clientMessageId":"3c6ecf68-96d3-4ac1-9588-23e3bb105e12","roomId":"p-ab","senderId":"u-a","senderName":"Alice","text":"Hello Bob","sentAt":"2026-11-04T09:00:00Z","emojis":[]},"recipients":["u-a","u-b"]}
 ]
 ```
 
@@ -66,9 +66,9 @@ The server writes Bob’s first-join visibility boundary during `group.join`. Bo
 ```json
 [
   {"direction":"client.emit","event":"room.history","payload":{"roomId":"p-ab","limit":50}},
-  {"direction":"ack","payload":{"ok":true,"data":{"roomId":"p-ab","messages":[{"seq":101,"messageId":"m-101","clientMessageId":"3c6ecf68-96d3-4ac1-9588-23e3bb105e12","roomId":"p-ab","senderId":"u-a","senderName":"Alice","text":"Hello Bob","sentAt":"2026-11-04T09:00:00Z"}],"nextBeforeSeq":null,"highWatermarkSeq":101}}},
+  {"direction":"ack","payload":{"ok":true,"data":{"roomId":"p-ab","messages":[{"seq":101,"messageId":"m-101","clientMessageId":"3c6ecf68-96d3-4ac1-9588-23e3bb105e12","roomId":"p-ab","senderId":"u-a","senderName":"Alice","text":"Hello Bob","sentAt":"2026-11-04T09:00:00Z","emojis":[]}],"nextBeforeSeq":null,"highWatermarkSeq":101}}},
   {"direction":"client.emit","event":"room.send","payload":{"roomId":"p-ab","clientMessageId":"3c6ecf68-96d3-4ac1-9588-23e3bb105e12","text":"Hello Bob"}},
-  {"direction":"ack","payload":{"ok":true,"data":{"message":{"seq":101,"messageId":"m-101","clientMessageId":"3c6ecf68-96d3-4ac1-9588-23e3bb105e12","roomId":"p-ab","senderId":"u-a","senderName":"Alice","text":"Hello Bob","sentAt":"2026-11-04T09:00:00Z"},"replayed":true}}}
+  {"direction":"ack","payload":{"ok":true,"data":{"message":{"seq":101,"messageId":"m-101","clientMessageId":"3c6ecf68-96d3-4ac1-9588-23e3bb105e12","roomId":"p-ab","senderId":"u-a","senderName":"Alice","text":"Hello Bob","sentAt":"2026-11-04T09:00:00Z","emojis":[]},"replayed":true}}}
 ]
 ```
 
@@ -81,8 +81,9 @@ Both are implemented after R1–R11. Typing is transient and room-scoped; AI che
   {"direction":"client.emit","event":"typing.set","payload":{"roomId":"p-ab","isTyping":true}},
   {"direction":"server.emit","event":"typing.updated","payload":{"roomId":"p-ab","userId":"u-a","isTyping":true,"expiresInMs":3000},"recipients":["u-b"]},
   {"direction":"client.emit","event":"message.emojiSuggest","payload":{"roomId":"p-ab","messageId":"m-101"}},
-  {"direction":"ack","payload":{"ok":true,"data":{"emoji":"🎉"}}}
+  {"direction":"server.emit","event":"message.emojiAdded","payload":{"roomId":"p-ab","messageId":"m-101","attachment":{"emojiId":"emoji-101","emoji":"🎉","createdAt":"2026-11-07T00:00:00.000Z"}},"recipients":["u-a","u-b"]},
+  {"direction":"ack","payload":{"ok":true,"data":{"emoji":"🎉","attachment":{"emojiId":"emoji-101","emoji":"🎉","createdAt":"2026-11-07T00:00:00.000Z"}}}}
 ]
 ```
 
-The emoji acknowledgement goes only to the requester. The client shows it as a local short firework; it is not a persisted or broadcast reaction.
+The attachment is saved before its event and acknowledgement. Only eligible message readers receive the event; group membership alone does not grant access to pre-join messages. The acknowledgement goes to the requester. Subsequent requests return the first saved attachment without another provider call or event. History preserves saved emojis, including legacy multi-emoji messages. Clients hide the AI action while choosing and after any saved result arrives, merge by `emojiId`, animate first appearance once per chat session, and offer local replay. 🍅 is used for unknown/unmatched meaning or an unrecognized provider choice; malformed data and provider failures still allow retry.

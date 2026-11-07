@@ -55,7 +55,7 @@ Required constraints:
 - `(senderId, clientMessageId)` is unique, preventing duplicate manual retries.
 - A first-time group join saves `visibleFromSeq`, preventing access to earlier group messages.
 
-Do not add an AI-effect table or typing table yet. Typing is transient, and the initial AI firework is local and temporary.
+The AI emoji attachment table belongs to the later special-feature phase. Typing is transient and never needs a durable table.
 
 ## 3. Build accounts, authentication and presence — Guitar
 

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 
-import { DomainError, type MembershipRecord, type MessageRecord, type RoomRecord, type UserRecord } from './types.js';
+import { DomainError, type MembershipRecord, type MessageEmoji, type MessageRecord, type RoomRecord, type UserRecord } from './types.js';
 
 const schemaPath = new URL('./schema.sql', import.meta.url);
 const schemaSql = readFileSync(schemaPath, 'utf8');
@@ -79,7 +79,7 @@ function asMembership(row: MembershipRow): MembershipRecord {
   };
 }
 
-function asMessage(row: MessageRow): MessageRecord {
+function asMessage(row: MessageRow, emojis: MessageEmoji[]): MessageRecord {
   return {
     seq: row.seq,
     messageId: row.message_id,
@@ -88,6 +88,7 @@ function asMessage(row: MessageRow): MessageRecord {
     clientMessageId: row.client_message_id,
     text: row.text,
     sentAt: row.sent_at,
+    emojis,
   };
 }
 
@@ -345,7 +346,7 @@ export class Storage {
 
     if (existing) {
       if (existing.room_id === input.roomId && existing.text === input.text) {
-        return { message: asMessage(existing), replayed: true };
+        return { message: this.messageFromRow(existing), replayed: true };
       }
       throw new DomainError(
         'CLIENT_MESSAGE_ID_CONFLICT',
@@ -372,7 +373,7 @@ export class Storage {
       const row = this.database
         .prepare('SELECT * FROM messages WHERE seq = ?')
         .get(Number(result.lastInsertRowid)) as MessageRow;
-      return asMessage(row);
+      return this.messageFromRow(row);
     });
 
     return { message, replayed: false };
@@ -396,7 +397,7 @@ export class Storage {
          ORDER BY seq DESC LIMIT :limit`,
       )
       .all({ roomId: input.roomId, minimum, upperBound, limit }) as MessageRow[];
-    const messages = rows.reverse().map(asMessage);
+    const messages = rows.reverse().map(row => this.messageFromRow(row));
     const oldest = messages[0]?.seq;
     const hasOlder =
       oldest !== undefined &&
@@ -421,18 +422,55 @@ export class Storage {
   }
 
   isMessageVisibleTo(userId: string, roomId: string, messageId: string): boolean {
+    return this.getVisibleMessage(userId, roomId, messageId) !== undefined;
+  }
+
+  /** Return content only behind the same persisted boundary used by history and AI. */
+  getVisibleMessage(userId: string, roomId: string, messageId: string): MessageRecord | undefined {
     const membership = this.findMembership(roomId, userId);
     const room = this.database.prepare('SELECT * FROM rooms WHERE room_id = ?').get(roomId) as RoomRow | undefined;
     const message = this.database
       .prepare('SELECT * FROM messages WHERE room_id = ? AND message_id = ?')
       .get(roomId, messageId) as MessageRow | undefined;
 
-    return Boolean(
+    const visible = Boolean(
       membership &&
         room &&
         message &&
         (room.kind === 'private' || message.seq >= membership.visibleFromSeq),
     );
+    return visible && message ? this.messageFromRow(message) : undefined;
+  }
+
+  /** Keep the first saved result, including when another request won the race. */
+  attachMessageEmoji(actorId: string, roomId: string, messageId: string, emoji: string): {
+    attachment: MessageEmoji; created: boolean;
+  } {
+    return this.inTransaction(() => {
+      this.assertMember(actorId, roomId);
+      const message = this.getVisibleMessage(actorId, roomId, messageId);
+      if (!message) {
+        throw new DomainError('MESSAGE_NOT_AVAILABLE', 'This message is not available for an AI effect.');
+      }
+      if (message.emojis.length > 0) return { attachment: message.emojis[0], created: false };
+      const result = this.database.prepare(
+        `INSERT INTO message_emojis (emoji_id, message_id, emoji, created_at)
+         VALUES (?, ?, ?, ?) ON CONFLICT (message_id, emoji) DO NOTHING`,
+      ).run(randomUUID(), messageId, emoji, now());
+      const attachment = this.messageEmojis(messageId).find(entry => entry.emoji === emoji)!;
+      return { attachment, created: Number(result.changes) === 1 };
+    });
+  }
+
+  private messageEmojis(messageId: string): MessageEmoji[] {
+    const rows = this.database.prepare(
+      'SELECT emoji_id, emoji, created_at FROM message_emojis WHERE message_id = ? ORDER BY seq',
+    ).all(messageId) as Array<{ emoji_id: string; emoji: string; created_at: string }>;
+    return rows.map(row => ({ emojiId: row.emoji_id, emoji: row.emoji, createdAt: row.created_at }));
+  }
+
+  private messageFromRow(row: MessageRow): MessageRecord {
+    return asMessage(row, this.messageEmojis(row.message_id));
   }
 
   /** Authorization check for transient room-scoped features such as typing. */
