@@ -25,3 +25,9 @@ Save durable mutations before acknowledgement. History, reactions and AI input m
 `AuthGate` owns the browser's live Socket.IO connection through `useAccountAuth`. Conversation UI should consume its authenticated socket/snapshot and guarded `request` callback; do not mount another connection-status socket alongside it. Sign-out removes all room delivery subscriptions before the connection can authenticate as a different account.
 
 Preserve the user-supplied SVGs in docs/wireframes/ as the current UI/brand reference. docs/implementation-ownership.md supersedes its outdated authentication and special-feature selections: room-scoped typing and Saint’s AI-selected emoji firework are selected; AI Voice Chat and tomato reactions are not. Do not restore the removed generated chat-ui.html or supersede Figma with it. Public group member details must include offline members while the online directory lists only connected users.
+
+## Compose delivery
+
+Deployment commands and probes live in the Actions workflows; do not add `deploy.sh`, `smoke.mjs`, or app systemd units. Keep the Compose project/volume names stable across release directories. Never print resolved private configuration; validate with `docker compose config --quiet`.
+
+The compiled backend image must include `schema.sql` and the emoji catalog beside their emitted JavaScript modules. Preserve the schema-change guard and consistent SQLite backup before activation.

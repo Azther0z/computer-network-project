@@ -42,14 +42,14 @@ backend/                  # Node.js + Socket.IO + SQLite
   test/storage.test.ts    # Storage behavior tests
   data/                   # Ignored local SQLite database files
 docs/                     # Requirements, design and Figma SVGs
-infra/                    # GCP resources and the one-time identity/state bootstrap
-deploy/                   # Release packaging, activation, and delivery checks
+compose.yaml              # Frontend, backend, Caddy, and persistent volumes
+deploy/                   # Caddy routing and a private-configuration example
 .github/workflows/        # Pull-request checks and reviewed production delivery
 README.md
 AGENTS.md
 ```
 
-**Status:** The live conversation UI, accounts, persistent history, room-scoped typing, and Saint's Clef emoji effect are implemented locally. AI credentials remain server-side and are optional for core chat. Google Cloud delivery is prepared through [Terraform and GitHub Actions](docs/deployment.md). The user reports that its project, network, subnet, and firewall rules exist. GitHub/GCP bootstrap, VM creation, and public application deployment remain pending. The two-physical-computer demonstration remains pending.
+**Status:** The live conversation UI, accounts, persistent history, room-scoped typing, and Saint's Clef emoji effect are implemented locally. AI credentials remain server-side and are optional for core chat. Google Cloud delivery is prepared through [Docker Compose and GitHub Actions](docs/deployment.md). The user reports that its project, network, subnet, and firewall rules exist. One-time GitHub/GCP setup, VM creation, public image publication, and public application deployment remain pending. The two-physical-computer demonstration remains pending.
 
 ## Authentication integration
 

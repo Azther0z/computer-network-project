@@ -6,10 +6,10 @@ on:
     branches-ignore: [main]
   workflow_call:
     outputs:
-      artifact_name:
-        value: ${{ jobs.checks.outputs.artifact_name }}
-      archive_sha256:
-        value: ${{ jobs.checks.outputs.archive_sha256 }}
+      backend_image:
+        value: ${{ jobs.checks.outputs.backend_image }}
+      frontend_image:
+        value: ${{ jobs.checks.outputs.frontend_image }}
 
 permissions:
   contents: read
@@ -22,13 +22,19 @@ jobs:
   checks:
     name: Test, build, and validate
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: write
     outputs:
-      artifact_name: ${{ steps.package.outputs.artifact_name }}
-      archive_sha256: ${{ steps.package.outputs.archive_sha256 }}
+      backend_image: ${{ steps.publish.outputs.backend_image }}
+      frontend_image: ${{ steps.publish.outputs.frontend_image }}
     env:
       NEXT_TELEMETRY_DISABLED: '1'
       NEXT_PUBLIC_BACKEND_URL: https://talkmato.azther0z.online
+      BACKEND_IMAGE: talkmato-backend:check
+      FRONTEND_IMAGE: talkmato-frontend:check
+      BACKEND_ENV_FILE: ./deploy/backend.env.example
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -40,53 +46,82 @@ jobs:
           cache-dependency-path: |
             backend/package-lock.json
             frontend/package-lock.json
-      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
-        with:
-          terraform_version: '1.17.1'
-          terraform_wrapper: false
-      - name: Validate workflows and deployment code
+      - name: Validate workflows and Compose
         run: |
-          python3 deploy/lint-workflows.py
-          python3 -m unittest discover -s infra/gcp/tests
-          python3 -m unittest discover -s deploy/tests
-          for script in deploy/*.sh infra/bootstrap/*.sh infra/gcp/*.sh; do bash -n "$script"; done
-      - name: Validate Terraform without cloud access
-        run: |
-          for directory in infra/gcp infra/bootstrap; do
-            terraform -chdir="$directory" fmt -check
-            terraform -chdir="$directory" init -backend=false -input=false -lockfile=readonly
-            terraform -chdir="$directory" validate
-          done
+          curl --fail --silent --show-error --location \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz \
+            --output "$RUNNER_TEMP/actionlint.tar.gz"
+          printf '8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  %s\n' \
+            "$RUNNER_TEMP/actionlint.tar.gz" | sha256sum --check --status
+          tar -xzf "$RUNNER_TEMP/actionlint.tar.gz" -C "$RUNNER_TEMP" actionlint
+          "$RUNNER_TEMP/actionlint" -color
+          docker compose config --quiet
       - name: Verify backend
         run: |
           npm --prefix backend ci
           npm --prefix backend run typecheck
           npm --prefix backend test
-      - name: Verify and build frontend
+      - name: Verify frontend
         run: |
           npm --prefix frontend ci
           npm --prefix frontend test
           npm --prefix frontend run lint
-          npm --prefix frontend run build
-      - name: Package the tested main revision
-        id: package
+      - name: Build production images
+        run: |
+          docker build --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" --tag "$BACKEND_IMAGE" --file backend/Dockerfile .
+          docker build --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" --tag "$FRONTEND_IMAGE" --file frontend/Dockerfile .
+          docker run --rm -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            caddy:2.11.9-alpine@sha256:0bbb055bda6793c999bde78b1b5ce3e89f829fb031af2cf50056ea1246559fee caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+      - name: Check packaged HTTP, native modules, and WebSocket authentication
+        run: |
+          trap 'docker rm -f check-backend check-frontend >/dev/null 2>&1 || true' EXIT
+          docker run -d --name check-backend --env-file deploy/backend.env.example \
+            -p 127.0.0.1:18080:8080 "$BACKEND_IMAGE"
+          docker run -d --name check-frontend -p 127.0.0.1:13000:3000 "$FRONTEND_IMAGE"
+          curl --fail --silent --show-error --retry 30 --retry-connrefused --retry-delay 1 \
+            http://127.0.0.1:18080/health | python3 -c 'import json,sys; assert json.load(sys.stdin)["ok"] is True'
+          curl --fail --silent --show-error --retry 30 --retry-connrefused --retry-delay 1 \
+            http://127.0.0.1:13000/ --output "$RUNNER_TEMP/index.html"
+          grep -q Talkmato "$RUNNER_TEMP/index.html"
+          node --input-type=module <<'JS'
+          import { io } from './backend/node_modules/socket.io-client/build/esm/index.js';
+          const socket = io('http://127.0.0.1:18080', {
+            autoConnect: false, transports: ['websocket'], reconnection: false,
+            extraHeaders: { Origin: 'https://talkmato.azther0z.online' },
+          });
+          try {
+            await new Promise((resolve, reject) => {
+              const timer = setTimeout(() => reject(Error('WebSocket readiness timed out')), 10000);
+              socket.once('auth.session', data => {
+                clearTimeout(timer);
+                if (data.snapshot) reject(Error('Unexpected authenticated session')); else resolve();
+              });
+              socket.once('connect_error', reject);
+              socket.connect();
+            });
+            const ack = await socket.timeout(5000).emitWithAck('auth.register', {
+              name: 'CI container check', password: 'synthetic-test-password',
+            });
+            if (!ack.ok) throw Error('Packaged account registration failed');
+          } finally { socket.disconnect(); }
+          JS
+      - name: Publish the tested images
+        id: publish
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         env:
-          SOURCE_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          python3 deploy/build-release.py --commit "$SOURCE_SHA" --output "$RUNNER_TEMP/release"
-          archive_sha=$(cut -d ' ' -f 1 "$RUNNER_TEMP/release/talkmato-release.tar.gz.sha256")
-          python3 deploy/verify-release.py "$RUNNER_TEMP/release/talkmato-release.tar.gz" \
-            "$archive_sha" "$SOURCE_SHA" "$RUNNER_TEMP/release/verified"
-          python3 deploy/check-package.py "$RUNNER_TEMP/release/verified"
-          printf 'archive_sha256=%s\nartifact_name=talkmato-%s-%s-%s\n' \
-            "$archive_sha" "$SOURCE_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - name: Store the immutable app release
-        if: steps.package.outputs.artifact_name != ''
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: ${{ steps.package.outputs.artifact_name }}
-          path: ${{ runner.temp }}/release/talkmato-release.tar.gz*
-          retention-days: 7
-          if-no-files-found: error
-          compression-level: 0
+          registry="ghcr.io/${GITHUB_REPOSITORY,,}"
+          tag="$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
+          for service in backend frontend; do
+            image="$registry-$service:$tag"
+            docker tag "talkmato-$service:check" "$image"
+            docker push "$image"
+            digest=$(docker image inspect --format '{{index .RepoDigests 0}}' "$image")
+            [[ $digest == "$registry-$service@sha256:"* ]]
+            printf '%s_image=%s\n' "$service" "$digest" >> "$GITHUB_OUTPUT"
+          done

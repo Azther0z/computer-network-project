@@ -1,0 +1,62 @@
+name: talkmato
+
+services:
+  backend:
+    image: ${BACKEND_IMAGE:?Set the tested backend image digest}
+    init: true
+    restart: unless-stopped
+    env_file:
+      - ${BACKEND_ENV_FILE:-/etc/talkmato/backend.env}
+    environment:
+      NODE_ENV: production
+      PORT: '8080'
+      DATABASE_PATH: /var/lib/talkmato/talkmato.sqlite
+    volumes:
+      - chat_data:/var/lib/talkmato
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8080/health', {signal: AbortSignal.timeout(3000)}).then(async r => {if (!r.ok || !(await r.json()).ok) process.exit(1)}).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    logging: &logging
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+
+  frontend:
+    image: ${FRONTEND_IMAGE:?Set the tested frontend image digest}
+    init: true
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/', {signal: AbortSignal.timeout(3000)}).then(r => {if (!r.ok) process.exit(1)}).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    logging: *logging
+
+  caddy:
+    image: caddy:2.11.9-alpine@sha256:0bbb055bda6793c999bde78b1b5ce3e89f829fb031af2cf50056ea1246559fee
+    restart: unless-stopped
+    ports: ['80:80', '443:443']
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    logging: *logging
+
+volumes:
+  chat_data:
+  caddy_data:
+  caddy_config:

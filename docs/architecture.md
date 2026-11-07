@@ -23,6 +23,8 @@ Proposed development addresses are UI `http://192.168.1.20:3000` and backend `ht
 
 SQLite is an embedded file accessed only by the Node process; it is not a browser-facing service. The generated database, WAL and SHM files are ignored by Git. Public deployment requires HTTPS/WSS because users submit passwords; do not use real passwords over an untrusted LAN. Use disposable course-project accounts for an unencrypted development demonstration.
 
+The optional public deployment runs the frontend, one backend, and Caddy in Docker Compose on one VM. Caddy provides HTTPS/WSS and routes directly to the appropriate container; chat still bypasses Next.js. Only ports 80/443 are public. SQLite and Caddy certificate data use persistent volumes. See [deployment](deployment.md) for setup and recovery.
+
 ## R1 protocols
 
 | Layer | What | Why and how Talkmato uses it |
