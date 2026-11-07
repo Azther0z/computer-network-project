@@ -1,6 +1,6 @@
 # Talkmato data model
 
-Talkmato persists accounts, rooms, memberships and messages in one SQLite database. Development uses Node `24.19.0` with `node:sqlite` / `DatabaseSync`; each developer’s ignored database file is `backend/data/talkmato.dev.sqlite`. Tests use `:memory:`. `backend/src/storage.ts` owns database opening, schema initialization and transactions.
+Talkmato persists accounts, rooms, memberships, messages and AI emoji attachments in one SQLite database. Development uses Node `24.19.0` with `node:sqlite` / `DatabaseSync`; each developer’s ignored database file is `backend/data/talkmato.dev.sqlite`. Tests use `:memory:` and isolated temporary databases under ignored `work/`. `backend/src/storage.ts` owns database opening, schema initialization and transactions.
 
 This document reflects full account registration/sign-in with eight-hour server sessions. The browser holds no resume token or password; its opaque session ID exists only in an HTTP-only cookie. See [architecture](architecture.md), [protocol](websocket-protocol.md), [implementation ownership](implementation-ownership.md) and the [core checklist](core-implementation-checklist.md).
 
@@ -12,6 +12,7 @@ erDiagram
     ROOM ||--o{ MEMBERSHIP : contains
     ROOM ||--o{ MESSAGE : stores
     USER ||--o{ MESSAGE : sends
+    MESSAGE ||--o{ MESSAGE_EMOJI : attaches
 ```
 
 | Entity | Fields | Constraints |
@@ -20,6 +21,7 @@ erDiagram
 | Room | `roomId`, `kind`, optional group `name`, optional `privatePairKey` | `kind` is `private` or `group`; canonical private pair key is unique. |
 | Membership | `roomId`, `userId`, `visibleFromSeq`, `joinedAt` | One membership per room/user; group creator is initial member; self-join only. |
 | Message | `seq`, `messageId`, `roomId`, `senderId`, `clientMessageId`, `text`, `sentAt` | Server assigns monotonic sequence/time/sender; unique `(senderId, clientMessageId)`. |
+| MessageEmoji | `emojiId`, `messageId`, `emoji`, `createdAt` | Storage transactions save only the first result per message. The existing unique `(messageId, emoji)` schema preserves legacy multi-emoji messages; internal `seq` orders attachments. |
 | LoginSession | opaque `sessionId`, `userId`, `expiresAt`, `createdAt` | Server-only eight-hour session; its ID is sent only in an HTTP-only cookie. |
 
 All IDs except `seq` are opaque strings. Times use UTC ISO 8601. Keep `seq` in JavaScript’s safe-integer range. Socket IDs, online status and typing state are runtime-only and never stored as durable identity.
@@ -30,6 +32,7 @@ All IDs except `seq` are opaque strings. Times use UTC ISO 8601. Keep `seq` in J
 - `rooms.privatePairKey` is unique when present.
 - `memberships(roomId, userId)` is unique.
 - `messages(senderId, clientMessageId)` is unique.
+- `message_emojis(messageId, emoji)` is unique; its message foreign key prevents orphaned attachments. Schema initialization adds the table to existing databases without replacing history.
 - Index `messages(roomId, seq)` for history pagination.
 - Foreign keys are enabled and protect related records.
 - Generated `.sqlite`, `-wal` and `-shm` files are ignored by Git; `schema.sql` and reset/migration scripts are committed.
@@ -58,7 +61,8 @@ Account deletion is a durable tombstone, not a foreign-key-breaking row deletion
 | User | `userId`, `name`, `online: boolean` |
 | PrivateRoom | `roomId`, `kind: "private"`, `members: User[2]` |
 | Group | `roomId`, `kind: "group"`, `name`, `members: User[]` |
-| Message | `seq`, `messageId`, `clientMessageId`, `roomId`, `senderId`, `senderName`, `text`, `sentAt` |
+| Message | `seq`, `messageId`, `clientMessageId`, `roomId`, `senderId`, `senderName`, `text`, `sentAt`, `emojis: MessageEmoji[]` |
+| MessageEmoji | `emojiId`, `emoji`, `createdAt` |
 | AccountSnapshot | `self: User`, `users: User[]`, `groups: Group[]`, `privateRooms: PrivateRoom[]` |
 | HistoryPage | `roomId`, `messages: Message[]`, `nextBeforeSeq: number or null`, `highWatermarkSeq: number` |
 
@@ -74,4 +78,4 @@ On successful sign-in, replace public/authorized room metadata. Keep an authoriz
 
 Typing is runtime-only: room/user/short-expiry state, cleared on send, empty draft, room switch, logout, disconnect or expiry. It is not persisted or replayed.
 
-The initial AI emoji firework creates no durable reaction/effect record. Before sending selected message text to an AI provider, verify the requester can read it under the same membership/history rules. Send only that message text and the fixed emoji allow-list; never send passwords, credentials or unrelated history.
+AI emoji attachments are durable. Before returning a saved result or sending text to a provider, verify message visibility under the membership/history rules. Existing results return without another provider call. For a new result, send only message text and the allow-list; recheck identity and visibility afterward, then commit the first attachment before acknowledgement or delivery. Per-message in-flight exclusion and the storage transaction prevent a second selection. Emit only to authenticated members whose join boundary permits the message. History returns saved attachments only with authorized messages. Existing multi-emoji data is preserved. Firework animation and local replay state remain transient browser state.

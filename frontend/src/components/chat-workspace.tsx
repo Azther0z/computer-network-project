@@ -3,7 +3,8 @@
 import { FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { AccountSnapshot, Ack } from '@/lib/account-types';
-import type { ChatMessage, GroupRoom, PrivateRoom } from '@/lib/chat-types';
+import type { ChatMessage, GroupRoom, MessageEmoji, MessageEmojiAdded, PrivateRoom } from '@/lib/chat-types';
+import { isMessageEmoji, mergeMessageEmojis } from '../lib/message-emojis';
 import type { AccountAuth } from '@/lib/use-account-auth';
 
 import styles from './chat-workspace.module.css';
@@ -38,7 +39,10 @@ function mergeByRoomId<T extends { roomId: string }>(current: T[], incoming: T[]
 
 function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]): ChatMessage[] {
   const messages = new Map(current.map((message) => [message.messageId, message]));
-  for (const message of incoming) messages.set(message.messageId, message);
+  for (const message of incoming) {
+    const previous = messages.get(message.messageId);
+    messages.set(message.messageId, { ...message, emojis: mergeMessageEmojis(previous?.emojis ?? [], message.emojis ?? []) });
+  }
   return [...messages.values()].sort((left, right) => (left.seq ?? 0) - (right.seq ?? 0));
 }
 
@@ -74,6 +78,10 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
     snapshot.groups.map((group) => asJoinedGroup(group, snapshot.self.userId)),
   );
   const [messagesByRoom, setMessagesByRoom] = useState<Record<string, ChatMessage[]>>({});
+  // Keep attachments that arrive before their history page, or while another room is open.
+  const [liveEmojis, setLiveEmojis] = useState<Record<string, MessageEmoji[]>>({});
+  const seenEmojiIds = useRef(new Set<string>());
+  const [fireworkTarget, setFireworkTarget] = useState<HTMLDivElement | null>(null);
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [showCreateGroup, setShowCreateGroup] = useState(false);
@@ -91,6 +99,11 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
   const lastTypingUpdateRef = useRef(0);
   const memberDetailsRef = useRef<HTMLDivElement>(null);
   const messageAreaRef = useRef<HTMLElement>(null);
+
+  const rememberEmoji = useCallback(({ messageId, attachment }: MessageEmojiAdded) => {
+    if (!isMessageEmoji(attachment)) return;
+    setLiveEmojis(current => ({ ...current, [messageId]: mergeMessageEmojis(current[messageId] ?? [], [attachment]) }));
+  }, []);
 
   const sendTyping = useCallback((roomId: string, isTyping: boolean) => {
     const now = Date.now();
@@ -132,14 +145,16 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
     socket.on('private.opened', privateOpened);
     socket.on('private.updated', privateOpened);
     socket.on('message.created', messageCreated);
+    socket.on('message.emojiAdded', rememberEmoji);
     socket.on('typing.updated', typingUpdated);
     return () => {
       socket.off('private.opened', privateOpened);
       socket.off('private.updated', privateOpened);
       socket.off('message.created', messageCreated);
+      socket.off('message.emojiAdded', rememberEmoji);
       socket.off('typing.updated', typingUpdated);
     };
-  }, [socket]);
+  }, [socket, rememberEmoji]);
 
   const rooms = useMemo<Room[]>(() => [...privateRooms, ...groups], [groups, privateRooms]);
   const activeRoom = rooms.find((room) => room.roomId === activeRoomId) ?? null;
@@ -352,6 +367,7 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
       </aside>
 
       <main className={styles.conversation}>
+        <div ref={setFireworkTarget} className={styles.fireworkLayer} data-firework-layer="" />
         {error && <p className={styles.error} role="alert">{error}</p>}
         {pendingMessage && <button type="button" className={styles.retry} disabled={busy} onClick={() => void sendWithId(pendingMessage)}>Retry last message</button>}
         {!activeRoom && <div className={styles.emptyState}><img className={styles.emptyStateIcon} src="./chat-conversation-icon.svg" alt="Chat icon" /><h1>Choose a conversation</h1><p>Select a person or group to open a room.</p></div>}
@@ -367,10 +383,13 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
               {loadingRoomId !== activeRoom.roomId && activeMessages.length === 0 && <li className={styles.noMessages}>No messages yet.</li>}
               {activeMessages.map((message) => {
                 const own = message.senderId === snapshot.self.userId;
-                return <li key={message.messageId} className={own ? styles.ownMessage : styles.receivedMessage}>
-                  {!own && activeRoom.kind === 'group' && <strong className={styles.messageSender}>{message.senderName}</strong>}
+                const showSender = !own && activeRoom.kind === 'group';
+                return <li key={message.messageId} className={`${styles.messageRow} ${own ? `${styles.ownMessageRow} ${styles.ownMessage}` : ''} ${showSender ? styles.groupMessageRow : ''}`}>
+                  {showSender && <strong className={styles.messageSender}>{message.senderName}</strong>}
                   <div className={styles.messageBubble}><p>{message.text}</p><time>{displayTime(message.sentAt)}</time></div>
-                  <MessageEmojiEffect roomId={activeRoom.roomId} messageId={message.messageId} request={account.request} />
+                  <MessageEmojiEffect roomId={activeRoom.roomId} messageId={message.messageId} request={account.request}
+                    attachments={mergeMessageEmojis(message.emojis ?? [], liveEmojis[message.messageId] ?? [])} seenEmojiIds={seenEmojiIds.current} fireworkTarget={fireworkTarget}
+                    onAttachment={attachment => rememberEmoji({ roomId: activeRoom.roomId, messageId: message.messageId, attachment })} />
                 </li>;
               })}
             </ol>

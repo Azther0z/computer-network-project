@@ -129,20 +129,21 @@ Primary: R5–R11. Poom’s handlers rely on Guitar’s authentication guard; au
 
 ## Saint — AI emoji firework
 
-Saint owns the AI special feature: a user selects a message, then Cloudflare Clef chooses from a curated subset of 240 emojis and displays it as a local firework effect. The subset fits one Choice question with at most 255 options. Choices use default yellow and gender-neutral forms where available. See the [AI setup](../README.md#ai-emoji-effect).
+Saint owns the AI special feature: a user selects a message, then Cloudflare Clef chooses from a curated subset of 240 emojis. The backend saves the first result on the message and delivers it to everyone permitted to read it. Each message permits one successful selection, shared by all readers. Existing multi-emoji messages retain their saved attachments. The subset fits one Choice question with at most 255 options. Choices use default yellow and gender-neutral forms where available; 🍅 is the default for unknown or unmatched meaning and unrecognized provider choices. See the [AI setup](../README.md#ai-emoji-effect).
 
 This feature is implemented only after the R1–R11 core chat flow passes. It is not a replacement for normal message delivery, room membership checks or persistent history.
 
 ### Chosen feature flow
 
-1. A user selects an existing message and chooses **AI emoji effect**.
+1. A user chooses **AI emoji effect** on a message with no saved result. The button disappears while selection is pending and stays removed for every reader after success. Failed requests offer manual retry.
 2. The browser asks the backend to analyze that one selected message.
 3. The backend verifies the requester may read that message using persisted room membership and the group join-history boundary.
-4. The backend sends only the selected message text and the curated subset's fixed choice descriptions in one request to the AI provider. It must not send unrelated room history, passwords, credentials, resume/session data or user-private metadata. Match the message tone or intent. For neutral messages, choose a subject-related emoji.
+4. If a result is already saved, return it without calling the provider. Otherwise allow one selection in flight for that message and send only its text and the curated subset's fixed choice descriptions in one request. Do not send unrelated history, passwords, credentials, resume/session data or private metadata. Match tone or intent; for neutral messages choose a related subject, or 🍅 when no choice fits.
 5. The AI returns one emoji from the allow-list. The backend validates the response against that allow-list before returning it.
-6. The requesting client displays that emoji as a short, local firework animation over the selected message. The initial scope does not persist or broadcast the animation as a reaction; it is a visual result for the requester.
+6. The backend saves the first emoji attachment before acknowledging and delivering `message.emojiAdded` to connected eligible readers. The storage transaction returns an existing first result if another request already saved one. Repeats do not call the provider, insert or emit again. History includes saved attachments for returning offline readers.
+7. Each browser animates an attachment the first time it renders in the chat session, keeps a saved emoji button, and lets that button replay the firework locally without another AI call. Rerenders and room switches do not automatically replay already-seen attachments.
 
-If the AI provider fails, times out or returns an invalid emoji, show a recoverable error and do not invent an AI result. Keep a documented deterministic fallback only if the team explicitly chooses one; do not present that fallback as an AI decision.
+For an otherwise valid response with an unrecognized choice, use the chosen deterministic default 🍅. If the provider fails, times out or returns malformed response data, show a recoverable error and allow manual retry without saving a result.
 
 ### Backend ownership
 
@@ -152,20 +153,22 @@ If the AI provider fails, times out or returns an invalid emoji, show a recovera
 - Add an AI service module that sends only the allowed message text and emoji list to the selected provider/model.
 - Require a constrained, machine-readable response containing exactly one allowed emoji; validate it server-side.
 - Return a success/failure acknowledgement without exposing provider credentials, prompts containing sensitive values or raw provider errors.
+- Persist attachments before success and enforce each recipient's message visibility for delivery; room subscriptions are not authorization.
 - Add tests for nonmember/pre-join rejection, malformed AI output, provider failure and allow-list validation.
 
 ### Frontend ownership
 
-- Add an accessible **AI emoji effect** action to each message the current user is allowed to view.
+- Add an accessible diamond-only **AI emoji effect** action beside visible bubbles without saved attachments: right of received bubbles, left of sent bubbles. Hide it while pending and after a result arrives through history, live events or acknowledgement.
 - Show loading state while the AI chooses the emoji and an error/retry state when it fails.
-- Render the returned allowed emoji as a short firework animation anchored to that message.
+- Merge saved history, live attachment events and acknowledgements by attachment ID, including events arriving before history.
+- Render saved emoji buttons in the diamond action's position beside the bubble. Animate first appearance in a shared conversation-wide overlay with randomized sizes and positions, and allow local replay on click. The overlay must not block chat controls or scroll with a message.
 - Respect reduced-motion preferences: use a still emoji or non-animated result when the user requests reduced motion.
-- Do not make the animation look like a saved normal reaction in the first version.
+- Replaying a saved emoji must not invoke the AI provider or create another attachment.
 
 ### Done when
 
 1. An authorized user selects a visible message and receives one allowed emoji selected by the AI.
-2. The emoji is displayed as a short firework effect for that requester.
+2. Eligible connected readers receive the first saved result, and offline readers recover it from history. The action remains removed after refresh and restart; later requests reuse the saved result. Existing attachments remain intact. First render animates once per chat session; saved buttons replay locally.
 3. A nonmember and a user who cannot see a pre-join group message cannot invoke the feature on it.
 4. Invalid AI output and provider failures show a safe error without leaking data.
 5. The presentation records the provider/model, prompt design, code evidence and AI prompts as required by the template.

@@ -160,11 +160,20 @@
 
 .conversation {
   position: relative;
+  isolation: isolate;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   min-height: 0;
   overflow: hidden;
   min-width: 0;
+}
+
+.fireworkLayer {
+  position: absolute;
+  z-index: 10;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
 }
 
 .noRooms {
@@ -356,36 +365,42 @@
 }
 
 @keyframes typingPulse {
-  0%,
-  100% {
-    opacity: 0.45;
-  }
-
-  50% {
-    opacity: 1;
-  }
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .typingStatus:not(:empty) {
-    animation: none;
-  }
+  .typingStatus:not(:empty) { animation: none; }
 }
 
-.receivedMessage,
-.ownMessage {
-  position: relative;
+.messageRow {
+  --bubble-column: 1;
+  --action-column: 2;
+  --content-row: 1;
   display: grid;
-  gap: 5px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 8px;
+  row-gap: 4px;
+  justify-self: start;
+  justify-items: start;
   max-width: min(75%, 520px);
+  min-width: 0;
   color: #292725;
 }
 
-.ownMessage {
+.ownMessageRow {
+  --bubble-column: 2;
+  --action-column: 1;
+  grid-template-columns: auto minmax(0, 1fr);
   justify-self: end;
+  justify-items: end;
 }
 
+.groupMessageRow { --content-row: 2; }
+
 .messageSender {
+  grid-column: var(--bubble-column, 1);
+  grid-row: 1;
   display: block;
   color: #e7473f;
   font-size: 0.82rem;
@@ -397,6 +412,10 @@
 }
 
 .messageBubble {
+  grid-column: var(--bubble-column, 1);
+  grid-row: var(--content-row, 1);
+  position: relative;
+  min-width: 0;
   display: grid;
   gap: 6px;
   width: fit-content;

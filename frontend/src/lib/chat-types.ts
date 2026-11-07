@@ -4,6 +4,18 @@ export type ChatUser = {
   online: boolean;
 };
 
+export type MessageEmoji = {
+  emojiId: string;
+  emoji: string;
+  createdAt: string;
+};
+
+export type MessageEmojiAdded = {
+  roomId: string;
+  messageId: string;
+  attachment: MessageEmoji;
+};
+
 export type ChatMessage = {
   seq?: number;
   messageId: string;
@@ -13,6 +25,7 @@ export type ChatMessage = {
   senderName: string;
   text: string;
   sentAt: string;
+  emojis?: MessageEmoji[];
 };
 
 export type PrivateRoom = {

@@ -99,7 +99,7 @@ const typing = new TypingPresence(io, storage);
 const emojiEffects = new EmojiEffects(storage, new ClefSelector({
   accountId: process.env.CLOUDFLARE_ACCOUNT_ID,
   token: process.env.CLOUDFLARE_AUTH_TOKEN ?? process.env.CLOUDFLARE_API_TOKEN,
-}));
+}), { emitToUser: auth.emitToUser });
 io.on('connection', (socket) => {
   auth.register(socket);
   registerRoomHandlers(socket, io, storage, {

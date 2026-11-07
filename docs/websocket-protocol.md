@@ -26,7 +26,7 @@ Each command uses one event, one object payload and an acknowledgement callback.
 | `room.send` | `{roomId: string, clientMessageId: string, text: string}` | `{message: Message, replayed: boolean}` | Check actor/membership, commit once, then emit to connected eligible members. |
 | `room.history` | `{roomId: string, beforeSeq?: number, limit?: number}` | `HistoryPage` | Check persisted membership and group first-join boundary; default 50, maximum 100. |
 | `typing.set` | `{roomId: string, isTyping: boolean}` | `{}` | Member-only transient status; no draft text; throttle active updates. Implement after R1–R11. |
-| `message.emojiSuggest` | `{roomId: string, messageId: string}` | `{emoji: string}` | Read authorized persisted message text; use one Clef Choice question with at most 255 curated default-form emojis; validate response; requester only. |
+| `message.emojiSuggest` | `{roomId: string, messageId: string}` | `{emoji: string, attachment: MessageEmoji}` | Authorize visibility, then reuse the first saved result or make one bounded Clef request. Save before acknowledgement and eligible-reader delivery; one selection in flight per message. |
 
 `auth.register` and `auth.login` return `ALREADY_AUTHENTICATED` if the socket already has an account. Every other application command on an unauthenticated socket returns `NOT_AUTHENTICATED` without revealing room data. `auth.logout` on an unauthenticated socket returns `NOT_AUTHENTICATED`.
 
@@ -44,17 +44,20 @@ Each command uses one event, one object payload and an acknowledgement callback.
 | `private.opened` | `{room: PrivateRoom}` | Online private participants only, when initially created. |
 | `private.updated` | `{room: PrivateRoom}` | Remaining online private participant after a peer deletes their account; peer name becomes `<Unknown>`. |
 | `message.created` | `Message` | Connected members eligible to read that message, including sender. |
+| `message.emojiAdded` | `{roomId, messageId, attachment: MessageEmoji}` | Authenticated connected members permitted to read that message, including requester. Recheck persisted membership and group join boundary per recipient. |
 | `typing.updated` | `{roomId, userId, isTyping, expiresInMs}` | Other connected current room members only. |
 
 There is no `room.closed` on disconnect. Clear runtime presence/typing and emit updated directories; do not delete account, membership or history. After successful register/login, acknowledge the account snapshot before resulting directory events.
 
 Typing true expires after 3000 ms. Clear it on local/peer disconnect, sign-out, room switch, empty draft, send, explicit false or expiry. Never save/replay it.
 
-The first AI emoji effect returns only to its requesting client. Do not broadcast or persist it as a message/reaction. Provider failure or malformed/non-allow-listed output returns a safe error with no AI result.
+AI results attach to messages durably, with one successful selection per message shared by all readers. `MessageEmoji` contains `{emojiId, emoji, createdAt}`. Commit before acknowledging or emitting `message.emojiAdded`. Later requests authorize visibility and return the first saved attachment without another provider call, insert or event. Existing multi-emoji messages retain all their saved attachments in history. 🍅 is the default for unclear/unmatched messages and unrecognized provider choices in otherwise valid responses. Provider or storage failures and malformed response data remain retryable errors.
+
+Browsers merge attachments from history, events and acknowledgements by `emojiId`. Hide the AI action immediately while choosing and whenever any saved attachment exists, including after refresh. Failures with no saved result offer manual retry. New attachments animate on first appearance in the current chat session and remain as replay buttons. Duplicate delivery, rerender or room switch does not automatically replay a seen attachment. Clicking a saved emoji replays locally without a server command or AI call. A refreshed/reconnected chat starts a new rendering session.
 
 AI requests accept exactly `roomId` and `messageId`, without client-supplied text or identity. Apply the same persisted membership and first-join visibility rules as history. Missing and pre-join messages both return `MESSAGE_NOT_AVAILABLE`. After the provider returns, recheck the socket identity and message visibility before acknowledging success. Logout and disconnect cancel pending provider work.
 
-One account has at most one AI request in flight and a ten-second start cooldown. The single backend permits two concurrent AI requests. These limits are transient process state, not a billing cap. The provider operation has an eight-second total deadline, below the browser's ten-second acknowledgement timeout. No provider request is automatically retried. See the [AI setup](../README.md#ai-emoji-effect).
+One account has at most one AI request in flight and a one-second start cooldown. Each message permits one in-flight selection; competing requests return `AI_RATE_LIMITED`. The single backend permits two concurrent AI requests. Saved results bypass provider work and its limits after authorization. These limits are transient process state, not a billing cap. The provider operation has an eight-second total deadline, below the browser's ten-second acknowledgement timeout. No provider request is automatically retried. See the [AI setup](../README.md#ai-emoji-effect).
 
 ## Validation and errors
 
@@ -75,8 +78,8 @@ One account has at most one AI request in flight and a ten-second start cooldown
 | `ROOM_NOT_FOUND` / `WRONG_ROOM_TYPE` / `NOT_MEMBER` | Missing/inaccessible room, wrong kind or membership failure. |
 | `MESSAGE_NOT_AVAILABLE` | Missing or historically inaccessible selected AI message. |
 | `CLIENT_MESSAGE_ID_CONFLICT` | Deduplication key reused with different content. |
-| `AI_UNAVAILABLE` / `AI_INVALID_RESPONSE` | Provider failure or invalid allow-list result. |
-| `AI_RATE_LIMITED` | Account cooldown, account request already in flight, or global AI concurrency limit. |
+| `AI_UNAVAILABLE` / `AI_INVALID_RESPONSE` | Provider failure or malformed response data. An unrecognized choice in otherwise valid data defaults to 🍅. |
+| `AI_RATE_LIMITED` | Account cooldown, account/message selection already in flight, or global AI concurrency limit. |
 | `STORAGE_UNAVAILABLE` / `INTERNAL_ERROR` | No durable success; do not expose implementation detail. |
 
 Prioritize authorization before exposing room/type/message metadata. Test invalid credentials, duplicate-name registration, stale socket cleanup, private/group isolation, first-join history exclusion, duplicate sends, typing expiry and AI message visibility.
