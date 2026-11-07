@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import test from 'node:test';
-import { allowedEmoji, emojiCatalog, emojiTree, selectableEmojis, decisionAt, type ChoiceNode } from '../src/emoji/catalog.js';
+import { allowedEmoji, emojiCatalog } from '../src/emoji/catalog.js';
 import { ClefSelector, EmojiError } from '../src/emoji/clef.js';
 import { EmojiEffects } from '../src/emoji/handlers.js';
 import { Storage } from '../src/storage.js';
@@ -31,39 +30,18 @@ function fixtures() {
 }
 function code(response: Response): string { assert.equal(response.ok,false); return response.ok ? '' : response.error.code; }
 
-const routes = new Map<string, string[]>();
-function index(node: ChoiceNode, path: string[] = []) {
-  node = decisionAt(node);
-  if (node.entry) { routes.set(node.entry.id,path); return; }
-  for (const child of node.children!) index(child,[...path,child.id]);
-}
-index(emojiTree);
-
-test('the complete catalog stays versioned; selectable candidates enforce default variants and distinct descriptions', () => {
-  assert.equal(emojiCatalog.length,3944);
-  // Pin entries, descriptions, grouping and order from the original Unicode 17 catalog.
-  assert.equal(createHash('sha256').update(JSON.stringify(emojiCatalog)).digest('hex'),
-    '2d1a75d8c232e6ca220dbfa2b134f1c78c04a61f71bae904b3c0d3aa51a7d12b');
-  assert.equal(routes.size,selectableEmojis.length);
+test('the curated subset fits one Clef Choice and contains distinct default-form emoji', () => {
+  assert.ok(emojiCatalog.length>=2 && emojiCatalog.length<=255);
+  assert.equal(allowedEmoji.size,emojiCatalog.length);
+  assert.equal(new Set(emojiCatalog.map(entry=>entry.id)).size,emojiCatalog.length);
+  assert.equal(new Set(emojiCatalog.map(entry=>entry.name)).size,emojiCatalog.length);
   for (const emoji of ['👍🏿','👩‍💻','👨‍💻','🤴','👸','🎅','🤶','🤰','🫃','👫','👩‍❤️‍💋‍👨']) assert.equal(allowedEmoji.has(emoji),false,emoji);
-  for (const emoji of ['👍','🧑‍💻','🫅','🧑‍🎄','🫄','🧑‍🤝‍🧑','💏','💑','🐘','🇹🇭','🎸','💻']) assert.ok(allowedEmoji.has(emoji),emoji);
-  assert.ok(selectableEmojis.every(e=>!e.points.some(n=>n>=0x1f3fb && n<=0x1f3ff)));
-  function walk(node: ChoiceNode) {
-    node=decisionAt(node);
-    if(node.entry) return;
-    assert.ok(node.children!.length>=2 && node.children!.length<=255);
-    assert.equal(new Set(node.children!.map(c=>c.description)).size,node.children!.length);
-    for(const child of node.children!) {
-      const leaf=decisionAt(child).entry;
-      if(leaf?.subgroup==='country-flag') assert.ok(child.description.includes(leaf.name));
-      walk(child);
-    }
+  for (const emoji of ['😊','😐','❤️','👍','🧑‍💻','🐘','🇹🇭','🍜','🎸','💻']) assert.ok(allowedEmoji.has(emoji),emoji);
+  for (const entry of emojiCatalog) {
+    const points=Array.from(entry.emoji,character=>character.codePointAt(0)!);
+    assert.ok(!points.some(n=>(n>=0x1f3fb && n<=0x1f3ff) || [0x2640,0x2642,0x1f468,0x1f469].includes(n)),entry.emoji);
+    assert.ok(entry.name.trim().length>0);
   }
-  walk(emojiTree);
-  const emotions=emojiTree.children!.find(n=>n.description==='Smileys & Emotion')!;
-  assert.equal(emotions.children!.length,171);
-  assert.ok(emotions.children!.every(child=>child.entry));
-  assert.ok([...routes.values()].every(route=>route.length<=4));
 });
 
 test('AI authorization precedes provider calls and uses only the persisted selected text', async t => {
@@ -102,7 +80,7 @@ test('group nonmembers and pre-join messages cannot become AI input', async t =>
 });
 
 test('final validation rejects unsafe selector output and sanitizes unexpected errors', async t => {
-  for(const returned of ['👍🏿','not an emoji']) {
+  for(const returned of ['👍🏿','🦄','not an emoji']) {
     const f=fixtures();
     const effects=new EmojiEffects(f.storage,{suggest:async()=>returned}); effects.register(f.socket);
     assert.equal(code(await f.socket.trigger('message.emojiSuggest',{roomId:f.room.roomId,messageId:f.message.messageId})),'AI_INVALID_RESPONSE');
@@ -138,8 +116,9 @@ test('concurrent/cooldown requests are bounded, and account changes discard a pe
   assert.deepEqual(await next,{ok:true,data:{emoji:'😊'}});
 });
 
-test('Clef uses real HTTP with bounded choices and no message metadata; failures are safe and never retried', async t => {
+test('Clef sends the entire subset in one HTTP request with no metadata or automatic retries', async t => {
   let mode='success';
+  let selectedId='e_1f60a';
   let calls=0;
   const payloads: Array<Record<string,unknown>>=[];
   const server=createServer(async(req,res)=>{
@@ -154,9 +133,13 @@ test('Clef uses real HTTP with bounded choices and no message metadata; failures
     if(mode==='timeout') return;
     if(mode==='invalid-json') {res.end('<html>private provider details</html>');return;}
     const criteria=body.questions.selection.criteria as Record<string,string>;
-    let selected=routes.get('e_1f60a')!.find(id=>Object.hasOwn(criteria,id))!;
+    assert.ok(Object.keys(criteria).length>=2 && Object.keys(criteria).length<=255);
+    let selected=selectedId;
     if(mode==='unsafe') selected='e_1f44d_1f3ff';
+    if(mode==='outside-subset') selected='e_1f984';
     const probabilities=Object.fromEntries(Object.keys(criteria).map(id=>[id,id===selected?1:0]));
+    if(mode==='incomplete') delete probabilities[selected];
+    if(mode==='bad-sum') probabilities[selected]=0.5;
     res.setHeader('content-type','application/json');
     res.end(JSON.stringify({success:true,result:{answers:{selection:{type:'choice',choice:selected,confidence:1,probabilities}},usage:{input_tokens:10}}}));
   });
@@ -166,13 +149,22 @@ test('Clef uses real HTTP with bounded choices and no message metadata; failures
   const endpoint=new URL(`http://127.0.0.1:${address.port}/client/v4/accounts/${'0'.repeat(32)}/ai/run/@cf/cloudflare/clef`);
   const client=new ClefSelector({accountId:'0'.repeat(32),token:'synthetic-token'},{endpoint,timeoutMs:1000});
   assert.equal(await client.suggest('Synthetic happy message สุขใจ'),'😊');
+  assert.equal(calls,1,'one provider request per selection');
   for(const payload of payloads) {
     assert.deepEqual(Object.keys(payload).sort(),['model','questions','state']);
     assert.equal(payload.state,'Synthetic happy message สุขใจ');
     assert.equal(JSON.stringify(payload).includes('roomId'),false);
+    const questions=payload.questions as {selection:{type:string;criteria:Record<string,string>}};
+    assert.deepEqual(Object.keys(questions),['selection']);
+    assert.equal(questions.selection.type,'choice');
+    assert.deepEqual(questions.selection.criteria,Object.fromEntries(emojiCatalog.map(entry=>[entry.id,`${entry.emoji}: ${entry.name}`])));
   }
-  for(const [scenario,expected] of [['http','AI_UNAVAILABLE'],['redirect','AI_UNAVAILABLE'],['invalid-json','AI_INVALID_RESPONSE'],['unsafe','AI_INVALID_RESPONSE']]) {
-    mode=scenario; const before=calls;
+  const last=emojiCatalog.at(-1)!;
+  selectedId=last.id;
+  assert.equal(await client.suggest('Synthetic neutral message'),last.emoji);
+  assert.equal(calls,2,'the last catalog option also resolves in one request');
+  for(const [scenario,expected] of [['http','AI_UNAVAILABLE'],['redirect','AI_UNAVAILABLE'],['invalid-json','AI_INVALID_RESPONSE'],['unsafe','AI_INVALID_RESPONSE'],['outside-subset','AI_INVALID_RESPONSE'],['incomplete','AI_INVALID_RESPONSE'],['bad-sum','AI_INVALID_RESPONSE']]) {
+    mode=scenario; const before: number=calls;
     await assert.rejects(client.suggest('synthetic'),error=>error instanceof EmojiError && error.code===expected);
     assert.equal(calls-before,1,'no automatic retry or redirect');
   }

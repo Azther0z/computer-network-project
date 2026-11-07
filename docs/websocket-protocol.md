@@ -26,7 +26,7 @@ Each command uses one event, one object payload and an acknowledgement callback.
 | `room.send` | `{roomId: string, clientMessageId: string, text: string}` | `{message: Message, replayed: boolean}` | Check actor/membership, commit once, then emit to connected eligible members. |
 | `room.history` | `{roomId: string, beforeSeq?: number, limit?: number}` | `HistoryPage` | Check persisted membership and group first-join boundary; default 50, maximum 100. |
 | `typing.set` | `{roomId: string, isTyping: boolean}` | `{}` | Member-only transient status; no draft text; throttle active updates. Implement after R1–R11. |
-| `message.emojiSuggest` | `{roomId: string, messageId: string}` | `{emoji: string}` | Read authorized persisted message text; use staged Clef choices from the default-variant catalog; validate response; requester only. |
+| `message.emojiSuggest` | `{roomId: string, messageId: string}` | `{emoji: string}` | Read authorized persisted message text; use one Clef Choice question with at most 255 curated default-form emojis; validate response; requester only. |
 
 `auth.register` and `auth.login` return `ALREADY_AUTHENTICATED` if the socket already has an account. Every other application command on an unauthenticated socket returns `NOT_AUTHENTICATED` without revealing room data. `auth.logout` on an unauthenticated socket returns `NOT_AUTHENTICATED`.
 

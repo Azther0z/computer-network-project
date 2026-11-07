@@ -129,7 +129,7 @@ Primary: R5–R11. Poom’s handlers rely on Guitar’s authentication guard; au
 
 ## Saint — AI emoji firework
 
-Saint owns the AI special feature: a user selects a message, then Cloudflare Clef chooses an emoji from a versioned Unicode catalog and displays it as a local firework effect. The full catalog replaces the earlier 20-emoji proposal. Selectable choices use default yellow and gender-neutral forms where available. See the [AI setup](../README.md#ai-emoji-effect).
+Saint owns the AI special feature: a user selects a message, then Cloudflare Clef chooses from a curated subset of 240 emojis and displays it as a local firework effect. The subset fits one Choice question with at most 255 options. Choices use default yellow and gender-neutral forms where available. See the [AI setup](../README.md#ai-emoji-effect).
 
 This feature is implemented only after the R1–R11 core chat flow passes. It is not a replacement for normal message delivery, room membership checks or persistent history.
 
@@ -138,7 +138,7 @@ This feature is implemented only after the R1–R11 core chat flow passes. It is
 1. A user selects an existing message and chooses **AI emoji effect**.
 2. The browser asks the backend to analyze that one selected message.
 3. The backend verifies the requester may read that message using persisted room membership and the group join-history boundary.
-4. The backend sends only the selected message text and fixed choice descriptions for the current catalog stage to the AI provider. It must not send unrelated room history, passwords, credentials, resume/session data or user-private metadata. Match the message tone or intent. For neutral messages, choose a subject-related emoji.
+4. The backend sends only the selected message text and the curated subset's fixed choice descriptions in one request to the AI provider. It must not send unrelated room history, passwords, credentials, resume/session data or user-private metadata. Match the message tone or intent. For neutral messages, choose a subject-related emoji.
 5. The AI returns one emoji from the allow-list. The backend validates the response against that allow-list before returning it.
 6. The requesting client displays that emoji as a short, local firework animation over the selected message. The initial scope does not persist or broadcast the animation as a reaction; it is a visual result for the requester.
 
@@ -146,7 +146,7 @@ If the AI provider fails, times out or returns an invalid emoji, show a recovera
 
 ### Backend ownership
 
-- Use the pinned Unicode 17 catalog and enforce default variants through candidate construction and final validation. Do not trust prompt instructions to enforce this policy.
+- Keep the curated subset within Clef's 255-option limit and enforce default variants through candidate construction and final validation. Do not trust prompt instructions to enforce this policy.
 - Define an authenticated request such as `message.emojiSuggest` with `{roomId, messageId}`; the browser must not submit another user’s identity or arbitrary room text as authority.
 - Reuse Poom’s persisted authorization/history-visibility query before analyzing the selected message.
 - Add an AI service module that sends only the allowed message text and emoji list to the selected provider/model.
