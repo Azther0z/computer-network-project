@@ -169,7 +169,7 @@ export function registerRoomHandlers(
       const actor = requireActor(socket);
       const input = expectObject(payload);
       const name = expectString(input.name, 'name').trim();
-      if (name.length < 1 || name.length > 64) {
+      if ([...name].length < 1 || [...name].length > 64) {
         throw new RequestError('INVALID_PAYLOAD', 'Group name must contain 1–64 characters.');
       }
 
@@ -205,7 +205,7 @@ export function registerRoomHandlers(
       const roomId = expectString(input.roomId, 'roomId');
       const clientMessageId = expectString(input.clientMessageId, 'clientMessageId');
       const text = expectString(input.text, 'text');
-      if (text.trim().length < 1 || text.length > 4_000) {
+      if (text.trim().length < 1 || [...text].length > 4_000) {
         throw new RequestError('INVALID_PAYLOAD', 'Message text must contain 1–4000 characters.');
       }
 

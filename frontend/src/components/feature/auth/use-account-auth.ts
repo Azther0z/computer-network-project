@@ -31,10 +31,13 @@ export function useAccountAuth() {
   const connection = useRef<Socket | null>(null);
   const generation = useRef(0);
   const pending = useRef(false);
+  const deleting = useRef(false);
   const identity = useRef<AccountSnapshot | null>(null);
   const [socket, setSocket] = useState<Socket | null>(null);
   const [status, setStatus] = useState<'connecting' | 'connected' | 'offline'>('connecting');
   const [snapshot, setSnapshot] = useState<AccountSnapshot | null>(null);
+  // Display data never grants permission to emit a command.
+  const [cachedSnapshot, setCachedSnapshot] = useState<AccountSnapshot | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sessionChecked, setSessionChecked] = useState(false);
@@ -59,7 +62,11 @@ export function useAccountAuth() {
       setBusy(false);
     };
     client.on('connect', () => { resetIdentity(); setSessionChecked(false); setSocket(client); setStatus('connected'); });
-    const offline = () => { resetIdentity(); setSessionChecked(true); setSocket(null); setStatus('offline'); };
+    const offline = () => {
+      resetIdentity();
+      if (deleting.current) setCachedSnapshot(null);
+      setSessionChecked(true); setSocket(null); setStatus('offline');
+    };
     client.on('disconnect', offline);
     client.on('connect_error', offline);
     client.on('auth.session', ({ snapshot }: { snapshot?: AccountSnapshot }) => {
@@ -67,6 +74,9 @@ export function useAccountAuth() {
       if (snapshot) {
         identity.current = snapshot;
         setSnapshot(snapshot);
+        setCachedSnapshot(snapshot);
+      } else {
+        setCachedSnapshot(null);
       }
       setSessionChecked(true);
     });
@@ -81,11 +91,13 @@ export function useAccountAuth() {
       };
       identity.current = next;
       setSnapshot(next);
+      setCachedSnapshot(next);
     });
     client.on('groups.snapshot', ({ groups }: Pick<AccountSnapshot, 'groups'>) => {
       if (!identity.current) return;
       identity.current = { ...identity.current, groups };
       setSnapshot(identity.current);
+      setCachedSnapshot(identity.current);
     });
     client.connect();
     return () => {
@@ -100,6 +112,7 @@ export function useAccountAuth() {
     generation.current++;
     identity.current = null;
     setSnapshot(null);
+    setCachedSnapshot(null);
     pending.current = false;
     setBusy(false);
     setSocket(null);
@@ -125,6 +138,7 @@ export function useAccountAuth() {
       if (response.ok) {
         identity.current = response.data.snapshot;
         setSnapshot(response.data.snapshot);
+        setCachedSnapshot(response.data.snapshot);
         // The opaque cookie is set by HTTP, never exposed to application code or storage.
         void rememberConnection(client).catch(() => {});
       } else {
@@ -148,6 +162,7 @@ export function useAccountAuth() {
     setError(null);
     identity.current = null;
     setSnapshot(null); // Gate chat immediately, including while the acknowledgement is pending.
+    setCachedSnapshot(null);
     try {
       const response: Ack<object> = await client.timeout(10000).emitWithAck('auth.logout', {});
       if (current !== generation.current) return;
@@ -164,6 +179,7 @@ export function useAccountAuth() {
     const client = connection.current;
     if (!identity.current || pending.current || !client?.connected) return false;
     const current = generation.current;
+    deleting.current = true;
     pending.current = true;
     setBusy(true);
     setError(null);
@@ -176,6 +192,7 @@ export function useAccountAuth() {
       }
       identity.current = null;
       setSnapshot(null);
+      setCachedSnapshot(null);
       void forgetConnection().catch(() => {});
       return true;
     } catch {
@@ -185,6 +202,7 @@ export function useAccountAuth() {
       }
       return false;
     } finally {
+      deleting.current = false;
       if (current === generation.current) { pending.current = false; setBusy(false); }
     }
   }
@@ -205,7 +223,7 @@ export function useAccountAuth() {
   function reconnect() { connection.current?.connect(); }
   function clearError() { setError(null); }
 
-  return { socket, status, snapshot, busy, error, sessionChecked, authenticate, logout, deleteAccount, request, reconnect, clearError };
+  return { socket, status, snapshot, cachedSnapshot, busy, error, sessionChecked, authenticate, logout, deleteAccount, request, reconnect, clearError };
 }
 
 export type AccountAuth = ReturnType<typeof useAccountAuth>;

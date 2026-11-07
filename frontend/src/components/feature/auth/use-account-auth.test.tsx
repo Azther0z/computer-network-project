@@ -52,9 +52,13 @@ test('disconnect clears identity and reconnect never replays credentials', async
   await act(async () => { pending[0].resolve({ ok: true, data: { snapshot } }); await task; });
   act(() => { socket.connected = false; listeners.get('disconnect')!(); });
   expect(result.current.snapshot).toBeNull();
+  expect(result.current.cachedSnapshot).toEqual(snapshot);
+  await expect(result.current.request('room.send', {})).rejects.toThrow('Sign in');
   act(() => { socket.connected = true; socket.id = 'connection-2'; listeners.get('connect')!(); });
   expect(result.current.snapshot).toBeNull();
   expect(socket.emitWithAck).toHaveBeenCalledTimes(1);
+  act(() => listeners.get('auth.session')!({}));
+  expect(result.current.cachedSnapshot).toBeNull();
 });
 
 test('disconnected submits never emit; late acknowledgement cannot restore identity after reconnect', async () => {
@@ -91,6 +95,7 @@ test('sign out immediately gates chat and clears identity even when acknowledgem
   await act(async () => { pending[0].resolve({ ok: true, data: { snapshot } }); await task; });
   act(() => { task = result.current.logout(); });
   expect(result.current.snapshot).toBeNull();
+  expect(result.current.cachedSnapshot).toBeNull();
   await act(async () => { pending[1].reject(new Error('ack timeout')); await task; });
   expect(result.current.snapshot).toBeNull();
   expect(socket.disconnect).toHaveBeenCalled();
@@ -126,4 +131,16 @@ test('chat commands require authentication and are blocked as soon as sign-out s
   act(() => { task = result.current.logout(); });
   await expect(result.current.request('room.send', {})).rejects.toThrow('Sign in');
   await act(async () => { pending[2].resolve({ ok: true, data: {} }); await task; });
+});
+
+test('losing transport during account deletion discards display data even with an unknown result', async () => {
+  const { result } = renderHook(useAccountAuth);
+  act(() => { listeners.get('connect')!(); listeners.get('auth.session')!({ snapshot }); });
+  let task: Promise<boolean>;
+  act(() => { task = result.current.deleteAccount('test-password'); });
+  act(() => { socket.connected = false; listeners.get('disconnect')!(); });
+  expect(result.current.snapshot).toBeNull();
+  expect(result.current.cachedSnapshot).toBeNull();
+  await act(async () => { pending[0].reject(new Error('lost connection')); await task; });
+  expect(result.current.cachedSnapshot).toBeNull();
 });

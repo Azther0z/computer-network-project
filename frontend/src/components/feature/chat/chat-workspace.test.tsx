@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { ChatMessage, MessageEmoji } from '../../../lib/chat-types';
@@ -32,10 +32,10 @@ function setup(saved: MessageEmoji[] = []) {
   const account = { snapshot, socket, request, busy: false, logout: vi.fn(), deleteAccount: vi.fn(), error: null } as unknown as ComponentProps<typeof ChatWorkspace>['account'];
   const view = render(<ChatWorkspace account={account} />);
   return {
-    view, socket, request, listeners,
+    view, socket, request, listeners, account,
     emit: (event: string, value: unknown) => listeners.get(event)?.(value),
     finish: (roomId = 'room-one', emojis = saved) => finishHistory({ ok: true, data: {
-      roomId, messages: roomId === 'room-one' ? [{ ...message, emojis }] : [],
+      roomId, messages: roomId === 'room-one' ? [{ ...message, emojis }] : [], nextBeforeSeq: null, highWatermarkSeq: 1,
     } }),
   };
 }
@@ -104,4 +104,79 @@ test('the initial AI action is outside its message bubble and shows only the dia
   expect(action.parentElement?.previousElementSibling).toBe(text.parentElement);
   expect(action.textContent).toBe('✧');
   expect(action.getAttribute('title')).toBe('AI emoji effect');
+});
+
+test('older history retries the failed cursor, deduplicates live messages and stops at the last page', async () => {
+  const app = setup();
+  const replies: ((value: unknown) => void)[] = [];
+  app.request.mockImplementation(((event: string) => event === 'room.history'
+    ? new Promise(resolve => replies.push(resolve)) : Promise.resolve({ ok: true, data: {} })) as never);
+  fireEvent.click(screen.getByRole('button', { name: 'Study' }));
+  const latest = { ...message, seq: 51, messageId: 'latest', text: 'Latest message' };
+  act(() => app.emit('message.created', { ...message, seq: 52, messageId: 'live', text: 'Arrived during history' }));
+  await act(async () => replies.shift()!({ ok: true, data: { roomId: 'room-one', messages: [latest], nextBeforeSeq: 51, highWatermarkSeq: 51 } }));
+  expect(screen.getByText('Arrived during history')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Load older' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Load older' }));
+  expect(app.request.mock.calls.filter(([event]) => event === 'room.history')).toHaveLength(2);
+  await act(async () => replies.shift()!({ ok: false, error: { code: 'STORAGE_UNAVAILABLE', message: 'private detail' } }));
+  expect(screen.getByText('Latest message')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry history' }));
+  expect(app.request).toHaveBeenLastCalledWith('room.history', { roomId: 'room-one', beforeSeq: 51 });
+  act(() => app.emit('message.created', latest));
+  await act(async () => replies.shift()!({ ok: true, data: { roomId: 'room-one', messages: [message, latest], nextBeforeSeq: null, highWatermarkSeq: 51 } }));
+  expect(screen.getAllByText('Latest message')).toHaveLength(1);
+  expect(screen.getByText(message.text)).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Load older' })).toBeNull();
+  expect(screen.queryByText('private detail')).toBeNull();
+});
+
+test('initial history failure retries, and a late response cannot replace another room', async () => {
+  const app = setup();
+  const replies: ((value: unknown) => void)[] = [];
+  app.request.mockImplementation(((event: string) => event === 'room.history'
+    ? new Promise(resolve => replies.push(resolve)) : Promise.resolve({ ok: true, data: {} })) as never);
+  fireEvent.click(screen.getByRole('button', { name: 'Study' }));
+  await act(async () => replies.shift()!({ ok: false, error: { code: 'STORAGE_UNAVAILABLE' } }));
+  fireEvent.click(screen.getByRole('button', { name: 'Retry history' }));
+  const oldReply = replies.shift()!;
+  fireEvent.click(screen.getByRole('button', { name: 'Other' }));
+  await act(async () => {
+    replies.shift()!({ ok: true, data: { roomId: 'room-two', messages: [], nextBeforeSeq: null, highWatermarkSeq: 0 } });
+    oldReply({ ok: true, data: { roomId: 'room-one', messages: [message], nextBeforeSeq: null, highWatermarkSeq: 1 } });
+  });
+  expect(screen.queryByText(message.text)).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Retry history' })).toBeNull();
+});
+
+test('composition Enter is ignored, Shift+Enter stays local, and normal Enter sends once', async () => {
+  const app = setup();
+  fireEvent.click(screen.getByRole('button', { name: 'Study' }));
+  await act(async () => app.finish());
+  const input = screen.getByRole('textbox', { name: 'Message Study' });
+  fireEvent.change(input, { target: { value: 'ข้อความภาษาไทย' } });
+  fireEvent.compositionStart(input);
+  fireEvent.keyDown(input, { key: 'Enter' });
+  fireEvent.compositionEnd(input);
+  fireEvent.keyDown(input, { key: 'Enter', isComposing: true });
+  fireEvent.keyDown(input, { key: 'Enter', shiftKey: true });
+  expect(app.request.mock.calls.filter(([event]) => event === 'room.send')).toHaveLength(0);
+  app.request.mockImplementation(((event: string) => Promise.resolve(event === 'room.send'
+    ? { ok: true, data: { message, replayed: false } } : { ok: true, data: {} })) as never);
+  await act(async () => fireEvent.keyDown(input, { key: 'Enter' }));
+  expect(app.request.mock.calls.filter(([event]) => event === 'room.send')).toHaveLength(1);
+});
+
+test('group input permits the server limit of 64 astral code points', async () => {
+  const app = setup();
+  app.request.mockResolvedValue({ ok: true, data: { group: app.account.snapshot.groups[0] } });
+  fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
+  const input = screen.getByRole('textbox', { name: 'Group name' });
+  const create = within(screen.getByRole('form', { name: 'Create group' })).getByRole('button', { name: 'Create group' });
+  expect(input.hasAttribute('maxlength')).toBe(false);
+  fireEvent.change(input, { target: { value: '🍅'.repeat(65) } });
+  expect((create as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.change(input, { target: { value: '🍅'.repeat(64) } });
+  await act(async () => fireEvent.click(create));
+  expect(app.request).toHaveBeenCalledWith('group.create', { name: '🍅'.repeat(64) });
 });
