@@ -1,56 +1,101 @@
-.action { margin-top: 4px; }
+.action { display: contents; }
 .button {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   min-height: 32px;
   padding: 3px 7px;
-  border: 1px solid currentColor;
-  border-radius: 8px;
+  border: 0;
+  border-radius: 50%;
   color: inherit;
   background: transparent;
   font: inherit;
   font-size: 0.72rem;
   cursor: pointer;
 }
-.button:hover { background: rgb(255 255 255 / 14%); }
+.button:hover { background: #f5f1ec; }
 .button:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
 .button:disabled { cursor: wait; opacity: 0.65; }
-.error { display: block; margin-top: 4px; font-size: 0.75rem; line-height: 1.4; }
+.aiButton,
+.choosing,
+.savedEmojis {
+  grid-column: var(--action-column, 2);
+  grid-row: var(--content-row, 1);
+  align-self: center;
+}
+.aiButton,
+.choosing {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: #81766a;
+  font-size: 1.2rem;
+}
+.aiButton:hover { color: #c6433d; background: #fff0ed; }
+.failed { color: #a46b26; }
+.failed::after {
+  content: '';
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.choosing { animation: choosing 1s ease-in-out infinite alternate; }
+.savedEmojis {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  color: #695e52;
+}
+.savedEmoji { position: relative; display: inline-flex; }
+.savedButton { justify-content: center; width: 32px; height: 32px; padding: 0; font-size: 1.1rem; }
 .burst {
   position: absolute;
   z-index: 2;
   inset: 0;
-  display: grid;
-  place-items: center;
+  display: block;
+  overflow: hidden;
   pointer-events: none;
 }
 .main {
-  font-size: 3rem;
+  position: absolute;
+  left: var(--left);
+  top: var(--top);
+  font-size: clamp(3rem, var(--size), 6rem);
   line-height: 1;
+  transform: translate(-50%, -50%);
   filter: drop-shadow(0 3px 7px rgb(41 39 37 / 20%));
   animation: bloom 2s ease-out both;
 }
 .particle {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  font-size: 1.4rem;
+  left: var(--left);
+  top: var(--top);
+  font-size: var(--size);
   line-height: 1;
-  animation: scatter 1.7s ease-out var(--delay) both;
+  filter: drop-shadow(0 2px 4px rgb(41 39 37 / 16%));
+  animation: scatter var(--duration) cubic-bezier(0.15, 0.65, 0.3, 1) var(--delay) both;
 }
 @keyframes bloom {
-  0% { transform: scale(0.3); opacity: 0; }
-  20% { transform: scale(1.2); opacity: 1; }
-  38%, 78% { transform: scale(1); opacity: 1; }
-  100% { transform: scale(0.9); opacity: 0; }
+  0% { transform: translate(-50%, -50%) scale(0.3); opacity: 0; }
+  20% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+  38%, 65% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(0.9); opacity: 0; }
 }
 @keyframes scatter {
-  0% { transform: translate(-50%, -50%) scale(0.3); opacity: 0; }
-  18% { opacity: 1; }
-  100% { transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y))) scale(0.5); opacity: 0; }
+  0% { transform: translate(calc(-50% + var(--from-x)), calc(-50% + var(--from-y))) scale(0.15) rotate(0deg); opacity: 0; }
+  15%, 40% { opacity: 1; }
+  100% { transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y))) scale(0.5) rotate(var(--rotation)); opacity: 0; }
 }
+@keyframes choosing { from { opacity: 0.35; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
   .main { animation: none; }
   .particle { display: none; animation: none; }
+  .choosing { animation: none; }
 }

@@ -1,8 +1,0 @@
-simulation: clef-local
-routing: path
-mocks:
-  - name: clef
-    routeKey: clef
-    origin:
-      - api.cloudflare.com
-    path: postman/mocks/clef/default.js

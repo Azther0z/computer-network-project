@@ -80,7 +80,7 @@ An existing private room remains usable when its peer is offline. Group creators
 | Feature | Behavior |
 | --- | --- |
 | Typing indicator | “Alex is typing…” is visible only to other eligible members of the active room. Never show draft text. Stop it on send, empty draft, room switch, sign-out/disconnect or expiry. It is never persisted. |
-| AI emoji firework | A user invokes an accessible action on a visible message. After server authorization and AI selection from a fixed emoji allow-list, show a brief local firework animation anchored to that message. It is not a normal reaction, saved effect or room broadcast in the first version. Respect reduced-motion preference with a still emoji. |
+| AI emoji firework | Offer the accessible action on visible messages without saved results. Hide it immediately while choosing, then keep it removed for every reader after the first result is saved; failures allow retry. Use 🍅 for unclear/unmatched meaning or an unrecognized provider choice. Save and deliver the result to eligible readers. Keep saved emoji buttons, including existing multi-emoji messages, with a brief firework on first appearance per chat session. Clicking a saved button replays locally without another AI request. History restores emojis; rerenders, duplicate deliveries and room switches do not replay seen attachments. Respect reduced-motion preference with a still emoji. |
 | Account creation/sign-in | Persistent accounts make it possible to sign in later and retrieve authorized history. This is core project behavior; confirm separately with the instructor whether it receives a special-feature point. |
 | AI Voice Chat / tomato reaction | Not selected. Omit from implementation even if visible in a static wireframe. |
 
@@ -97,7 +97,7 @@ An existing private room remains usable when its peer is offline. Group creators
 | Load room | `room.history` | Loading state, messages and Load older. |
 | Send | `room.send` with `clientMessageId` | Pending until acknowledgement; explicit retry uses same key. |
 | Type | `typing.set` / `typing.updated` | Transient room-scoped status only. |
-| AI emoji effect | `message.emojiSuggest` | Loading, then local allowed-emoji firework or recoverable error. |
+| AI emoji effect | `message.emojiSuggest`, `message.emojiAdded`, history `emojis` | Once per message: hide action while choosing and after save; show saved emoji, first-render firework and local replay. 🍅 is the unknown default; malformed data and provider failures allow retry. |
 
 ## Accessibility and error states
 
@@ -106,7 +106,9 @@ An existing private room remains usable when its peer is offline. Group creators
 - Use Enter to send and Shift+Enter for a newline; do not send during IME composition.
 - Render message text as text, not HTML.
 - Do not steal focus when live messages arrive.
-- AI emoji actions must work by keyboard and touch, not hover only.
+- AI emoji actions must work by keyboard and touch, not hover only. The icon-only diamond keeps an accessible label and tooltip. Place it beside the bubble, on the right for received messages and the left for sent messages; saved emoji replay buttons replace it in the same position.
+- Keep diamond and saved emoji controls borderless, with a subtle hover background and visible keyboard focus. Failed AI requests mark the diamond with an amber dot; announce the explanation and include it in the retry tooltip rather than inserting an error row into the conversation.
+- Fireworks use a shared overlay covering the conversation pane, including its header and composer. Keep it independent of message scrolling, clipped to the pane and transparent to pointer input. Randomize particle sizes, positions, trajectories, rotation and timing once per play; rerenders must not change particles mid-animation. Reduced motion suppresses moving particles and shows a still emoji.
 - Keep chat actions disabled while unauthenticated, disconnected or loading an authentication result.
 
 | State | Copy/actions |

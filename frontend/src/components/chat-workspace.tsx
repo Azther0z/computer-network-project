@@ -1,9 +1,10 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { AccountSnapshot, Ack } from '@/lib/account-types';
-import type { ChatMessage, GroupRoom, PrivateRoom } from '@/lib/chat-types';
+import type { ChatMessage, GroupRoom, MessageEmoji, MessageEmojiAdded, PrivateRoom } from '@/lib/chat-types';
+import { isMessageEmoji, mergeMessageEmojis } from '../lib/message-emojis';
 import type { AccountAuth } from '@/lib/use-account-auth';
 
 import styles from './chat-workspace.module.css';
@@ -38,7 +39,10 @@ function mergeByRoomId<T extends { roomId: string }>(current: T[], incoming: T[]
 
 function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]): ChatMessage[] {
   const messages = new Map(current.map((message) => [message.messageId, message]));
-  for (const message of incoming) messages.set(message.messageId, message);
+  for (const message of incoming) {
+    const previous = messages.get(message.messageId);
+    messages.set(message.messageId, { ...message, emojis: mergeMessageEmojis(previous?.emojis ?? [], message.emojis ?? []) });
+  }
   return [...messages.values()].sort((left, right) => (left.seq ?? 0) - (right.seq ?? 0));
 }
 
@@ -74,6 +78,10 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
     snapshot.groups.map((group) => asJoinedGroup(group, snapshot.self.userId)),
   );
   const [messagesByRoom, setMessagesByRoom] = useState<Record<string, ChatMessage[]>>({});
+  // Keep attachments that arrive before their history page, or while another room is open.
+  const [liveEmojis, setLiveEmojis] = useState<Record<string, MessageEmoji[]>>({});
+  const seenEmojiIds = useRef(new Set<string>());
+  const [fireworkTarget, setFireworkTarget] = useState<HTMLDivElement | null>(null);
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [showCreateGroup, setShowCreateGroup] = useState(false);
@@ -89,6 +97,13 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const typingRoomRef = useRef<string | null>(null);
   const lastTypingUpdateRef = useRef(0);
+  const memberDetailsRef = useRef<HTMLDivElement>(null);
+  const messageAreaRef = useRef<HTMLElement>(null);
+
+  const rememberEmoji = useCallback(({ messageId, attachment }: MessageEmojiAdded) => {
+    if (!isMessageEmoji(attachment)) return;
+    setLiveEmojis(current => ({ ...current, [messageId]: mergeMessageEmojis(current[messageId] ?? [], [attachment]) }));
+  }, []);
 
   const sendTyping = useCallback((roomId: string, isTyping: boolean) => {
     const now = Date.now();
@@ -130,14 +145,16 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
     socket.on('private.opened', privateOpened);
     socket.on('private.updated', privateOpened);
     socket.on('message.created', messageCreated);
+    socket.on('message.emojiAdded', rememberEmoji);
     socket.on('typing.updated', typingUpdated);
     return () => {
       socket.off('private.opened', privateOpened);
       socket.off('private.updated', privateOpened);
       socket.off('message.created', messageCreated);
+      socket.off('message.emojiAdded', rememberEmoji);
       socket.off('typing.updated', typingUpdated);
     };
-  }, [socket]);
+  }, [socket, rememberEmoji]);
 
   const rooms = useMemo<Room[]>(() => [...privateRooms, ...groups], [groups, privateRooms]);
   const activeRoom = rooms.find((room) => room.roomId === activeRoomId) ?? null;
@@ -164,7 +181,25 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
     return () => window.clearInterval(refresh);
   }, [activeRoom, draft, isGroupPreview, sendTyping]);
 
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      if (messageAreaRef.current) messageAreaRef.current.scrollTop = messageAreaRef.current.scrollHeight;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeRoomId, activeMessages]);
+
   useEffect(() => { setShowMemberDetails(false); }, [activeRoomId]);
+
+  useEffect(() => {
+    if (!showMemberDetails) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (memberDetailsRef.current && !memberDetailsRef.current.contains(event.target as Node)) {
+        setShowMemberDetails(false);
+      }
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, [showMemberDetails]);
 
   useEffect(() => {
     if (!activeRoom || isGroupPreview) return;
@@ -239,12 +274,22 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
     }
   }
 
-  function sendMessage(event: FormEvent<HTMLFormElement>): void {
-    event.preventDefault();
+  function submitMessage(): void {
     const text = draft.trim();
     if (!activeRoom || isGroupPreview || !text || busy) return;
     sendTyping(activeRoom.roomId, false);
     void sendWithId({ roomId: activeRoom.roomId, text, clientMessageId: crypto.randomUUID() });
+  }
+
+  function sendMessage(event: FormEvent<HTMLFormElement>): void {
+    event.preventDefault();
+    submitMessage();
+  }
+
+  function handleMessageKeyDown(event: KeyboardEvent<HTMLTextAreaElement>): void {
+    if (event.key !== 'Enter' || event.shiftKey) return;
+    event.preventDefault();
+    submitMessage();
   }
 
   async function createGroup(event: FormEvent<HTMLFormElement>): Promise<void> {
@@ -280,7 +325,8 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
     <section className={styles.workspace} aria-label="Chat workspace">
       <aside className={styles.sidebar}>
         <div className={styles.brand}>
-          <span aria-hidden="true">●</span><strong>Talkmato</strong>
+          <img src="./talkmato-logo.svg" alt="Talkmato logo" />
+          <strong>Talkmato</strong>
           <div className={styles.accountActions}><button type="button" className={styles.signOut} onClick={() => void account.logout()} disabled={account.busy}>Sign out</button></div>
         </div>
         <section>
@@ -321,29 +367,37 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
       </aside>
 
       <main className={styles.conversation}>
+        <div ref={setFireworkTarget} className={styles.fireworkLayer} data-firework-layer="" />
         {error && <p className={styles.error} role="alert">{error}</p>}
         {pendingMessage && <button type="button" className={styles.retry} disabled={busy} onClick={() => void sendWithId(pendingMessage)}>Retry last message</button>}
-        {!activeRoom && <div className={styles.emptyState}><p className={styles.tomato} aria-hidden="true">●</p><h1>Choose a conversation</h1><p>Select a person or group to open a room.</p></div>}
+        {!activeRoom && <div className={styles.emptyState}><img className={styles.emptyStateIcon} src="./chat-conversation-icon.svg" alt="Chat icon" /><h1>Choose a conversation</h1><p>Select a person or group to open a room.</p></div>}
         {activeRoom && <>
           <header className={styles.roomHeader}>
             <div><p>{activeRoom.kind === 'group' ? 'Group chat' : 'Private chat'}</p><h1>{roomTitle(activeRoom, snapshot.self.userId)}</h1></div>
-            {activeRoom.kind === 'group' && <div className={styles.memberDetails}><button type="button" className={styles.memberButton} aria-expanded={showMemberDetails} onClick={() => setShowMemberDetails((shown) => !shown)}>{activeRoom.members.length} {activeRoom.members.length === 1 ? 'member' : 'members'}</button>{showMemberDetails && <div className={styles.memberPopover} role="dialog" aria-label="Group members"><strong>Members</strong><ul>{selfFirst(activeRoom.members, snapshot.self.userId).map((member) => <li key={member.userId}><span>{member.name}</span><small>{member.userId === snapshot.self.userId ? 'You' : member.online ? 'Online' : 'Offline'}</small></li>)}</ul></div>}</div>}
+            {activeRoom.kind === 'group' && <div ref={memberDetailsRef} className={styles.memberDetails}><button type="button" className={styles.memberButton} aria-expanded={showMemberDetails} onClick={() => setShowMemberDetails((shown) => !shown)}>{activeRoom.members.length} {activeRoom.members.length === 1 ? 'member' : 'members'}</button>{showMemberDetails && <div className={styles.memberPopover} role="dialog" aria-label="Group members"><strong>Members</strong><ul>{selfFirst(activeRoom.members, snapshot.self.userId).map((member) => <li key={member.userId}><span>{member.name}</span><small>{member.userId === snapshot.self.userId ? 'You' : member.online ? 'Online' : 'Offline'}</small></li>)}</ul></div>}</div>}
           </header>
           {isGroupPreview ? <section className={styles.groupPreview}><h2>Join to see the conversation</h2><p>Members are visible before joining. Earlier messages remain private.</p><div className={styles.previewMembers}><h3>Current members</h3><ul>{selfFirst(activeRoom.members, snapshot.self.userId).map((member) => <li key={member.userId}>{member.name}</li>)}</ul></div><button type="button" onClick={() => void joinGroup(activeRoom)} disabled={busy}>Join group</button></section> : <>
-            <section className={styles.messageArea}>
+            <section ref={messageAreaRef} className={styles.messageArea}>
             <ol className={`${styles.messages} ${activeMessages.length === 0 ? styles.messagesEmpty : ''}`} aria-label="Messages" aria-busy={loadingRoomId === activeRoom.roomId}>
               {loadingRoomId === activeRoom.roomId && <li className={styles.noMessages}>Loading messages…</li>}
               {loadingRoomId !== activeRoom.roomId && activeMessages.length === 0 && <li className={styles.noMessages}>No messages yet.</li>}
               {activeMessages.map((message) => {
                 const own = message.senderId === snapshot.self.userId;
-                return <li key={message.messageId} className={own ? styles.ownMessage : styles.receivedMessage}>{!own && <strong>{message.senderName}</strong>}<p>{message.text}</p><time>{displayTime(message.sentAt)}</time><MessageEmojiEffect roomId={activeRoom.roomId} messageId={message.messageId} request={account.request} /></li>;
+                const showSender = !own && activeRoom.kind === 'group';
+                return <li key={message.messageId} className={`${styles.messageRow} ${own ? `${styles.ownMessageRow} ${styles.ownMessage}` : ''} ${showSender ? styles.groupMessageRow : ''}`}>
+                  {showSender && <strong className={styles.messageSender}>{message.senderName}</strong>}
+                  <div className={styles.messageBubble}><p>{message.text}</p><time>{displayTime(message.sentAt)}</time></div>
+                  <MessageEmojiEffect roomId={activeRoom.roomId} messageId={message.messageId} request={account.request}
+                    attachments={mergeMessageEmojis(message.emojis ?? [], liveEmojis[message.messageId] ?? [])} seenEmojiIds={seenEmojiIds.current} fireworkTarget={fireworkTarget}
+                    onAttachment={attachment => rememberEmoji({ roomId: activeRoom.roomId, messageId: message.messageId, attachment })} />
+                </li>;
               })}
             </ol>
             <p className={styles.typingStatus} aria-live="polite">{typingNames.length === 1 ? `${typingNames[0]} is typing…` : typingNames.length > 1 ? `${typingNames.join(', ')} are typing…` : ''}</p>
             </section>
             <form className={styles.composer} onSubmit={sendMessage}>
               <label className="srOnly" htmlFor="message-draft">Message {roomTitle(activeRoom, snapshot.self.userId)}</label>
-              <textarea id="message-draft" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Write a message…" rows={2} disabled={busy || loadingRoomId === activeRoom.roomId} />
+              <textarea id="message-draft" value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={handleMessageKeyDown} placeholder="Write a message…" rows={2} disabled={busy || loadingRoomId === activeRoom.roomId} />
               <button type="submit" disabled={busy || loadingRoomId === activeRoom.roomId || !draft.trim()}>Send</button>
             </form>
           </>}

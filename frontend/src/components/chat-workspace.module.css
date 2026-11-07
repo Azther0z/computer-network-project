@@ -160,11 +160,20 @@
 
 .conversation {
   position: relative;
+  isolation: isolate;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   min-height: 0;
   overflow: hidden;
   min-width: 0;
+}
+
+.fireworkLayer {
+  position: absolute;
+  z-index: 10;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
 }
 
 .noRooms {
@@ -187,6 +196,12 @@
 .groupPreview h2,
 .modal h2 {
   color: #292725;
+}
+
+.emptyStateIcon {
+  width: 128px;
+  height: 128px;
+  justify-self: center;
 }
 
 .emptyState p,
@@ -345,38 +360,83 @@
   font-style: italic;
 }
 
-.receivedMessage,
-.ownMessage {
-  position: relative;
+.typingStatus:not(:empty) {
+  animation: typingPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes typingPulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .typingStatus:not(:empty) { animation: none; }
+}
+
+.messageRow {
+  --bubble-column: 1;
+  --action-column: 2;
+  --content-row: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 8px;
+  row-gap: 4px;
+  justify-self: start;
+  justify-items: start;
   max-width: min(75%, 520px);
+  min-width: 0;
+  color: #292725;
+}
+
+.ownMessageRow {
+  --bubble-column: 2;
+  --action-column: 1;
+  grid-template-columns: auto minmax(0, 1fr);
+  justify-self: end;
+  justify-items: end;
+}
+
+.groupMessageRow { --content-row: 2; }
+
+.messageSender {
+  grid-column: var(--bubble-column, 1);
+  grid-row: 1;
+  display: block;
+  color: #e7473f;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.ownMessage .messageSender {
+  text-align: right;
+}
+
+.messageBubble {
+  grid-column: var(--bubble-column, 1);
+  grid-row: var(--content-row, 1);
+  position: relative;
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  width: fit-content;
+  max-width: 100%;
   padding: 12px 14px;
   border-radius: 16px;
-  color: #292725;
   background: #f5f1ec;
 }
 
-.ownMessage {
-  justify-self: end;
+.ownMessage .messageBubble {
   color: #ffffff;
   background: #e7473f;
 }
 
-.receivedMessage strong {
-  display: block;
-  margin-bottom: 5px;
-  font-size: 0.82rem;
-}
-
-.receivedMessage p,
-.ownMessage p {
+.messageBubble p {
   line-height: 1.45;
   white-space: pre-wrap;
 }
 
-.receivedMessage time,
-.ownMessage time {
-  display: block;
-  margin-top: 6px;
+.messageBubble time {
+  justify-self: end;
   color: inherit;
   font-size: 0.72rem;
   opacity: 0.7;

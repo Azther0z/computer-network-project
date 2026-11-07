@@ -101,7 +101,7 @@ const aiCredentials = await loadAiCredentials();
 if (process.env.CLOUDFLARE_TOKEN_SECRET_VERSION && !aiCredentials.token) {
   console.warn('AI credentials are unavailable; core chat remains available.');
 }
-const emojiEffects = new EmojiEffects(storage, new ClefSelector(aiCredentials));
+const emojiEffects = new EmojiEffects(storage, new ClefSelector(aiCredentials), { emitToUser: auth.emitToUser });
 io.on('connection', (socket) => {
   auth.register(socket);
   registerRoomHandlers(socket, io, storage, {
