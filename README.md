@@ -42,11 +42,15 @@ backend/                  # Node.js + Socket.IO + SQLite
   test/storage.test.ts    # Storage behavior tests
   data/                   # Ignored local SQLite database files
 docs/                     # Requirements, design and Figma SVGs
+compose.yaml              # Frontend, backend, Caddy, and persistent volumes
+deploy/                   # Caddy routing
+.github/workflows/        # Pull-request checks
+cloudbuild.yaml           # Main-branch builds and reviewed GCE delivery
 README.md
 AGENTS.md
 ```
 
-**Status:** The live conversation UI, accounts, persistent history, room-scoped typing, and Saint's Clef emoji effect are implemented locally. AI credentials remain server-side and are optional for core chat. Public deployment and the two-physical-computer demonstration remain pending.
+**Status:** The live conversation UI, accounts, persistent history, room-scoped typing, and Saint's Clef emoji effect are implemented locally. AI credentials remain server-side and are optional for core chat. Google Cloud delivery is prepared through [Cloud Build and Docker Compose](docs/deployment.md). The user reports that its project, network, subnet, and firewall rules exist. Cloud Build trigger/IAM setup, VM creation, private Artifact Registry publication, Secret Manager configuration, and public deployment remain pending. The two-physical-computer demonstration remains pending.
 
 ## Authentication integration
 
@@ -64,6 +68,6 @@ Select the diamond beside a saved message: it sits to the right of received bubb
 
 Saved emoji buttons replace the diamond in the same position beside the message bubble. Each attachment plays a brief firework across the conversation pane on its first appearance in the current chat session, with fresh random sizes, positions, travel, rotation and timing on every play. The overlay stays separate from message scrolling and does not block clicking or typing. Clicking a saved emoji replays locally without another AI call or broadcast. Switching rooms or receiving the same attachment again does not automatically replay it. Reduced motion shows a still emoji. Failures offer manual retry without generating a replacement.
 
-The backend reads `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_AUTH_TOKEN` from its private process environment. Supply them through your local environment or server-side secret configuration, then start the backend normally. Keep them out of browser variables, URLs and Git. Without credentials, core chat still works and AI requests return `AI_UNAVAILABLE`.
+For local development, the backend reads `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_AUTH_TOKEN` from its private process environment. On GCE, pass the account ID and a numeric `CLOUDFLARE_TOKEN_SECRET_VERSION` resource reference instead; the backend fetches that version from Secret Manager at startup using the VM identity and keeps the token in memory. See the [deployment guide](docs/deployment.md) for IAM and rotation. Keep tokens out of browser variables, URLs and Git. Without available credentials, core chat still works and AI requests return `AI_UNAVAILABLE`.
 
 The curated set of 240 emojis is bundled in `backend/src/emoji/catalog-data.ts` and uses default yellow and gender-neutral forms where available. Each selection sends the entire subset in one Clef Choice question, within its 255-option limit. Clef is instructed to choose 🍅 for unclear or unmatched messages. A structurally valid response with an unrecognized choice also becomes 🍅; malformed responses, timeouts and provider failures still show a retryable error. The implementation does not guarantee that every valid emoji matches the message meaning. See the [WebSocket protocol](docs/websocket-protocol.md) for request limits and authorization rules.

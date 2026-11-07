@@ -23,3 +23,6 @@ Thumbs.db
 # Temporary work
 work/
 *.tmp
+
+# Accidental Google Actions credential files
+gha-creds-*.json

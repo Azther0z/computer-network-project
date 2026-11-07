@@ -14,7 +14,7 @@ The ingestion manifests include human/agent visual-review status. A parser rerun
 
 Browsers use socket.io-client directly with one Node.js/Socket.IO backend process; Next.js does not relay chat. Both ends use WebSocket-only transport and the default Socket.IO adapter. Durable storage does not justify multiple workers without shared routing design.
 
-Full account registration/sign-in with saved history supersedes the earlier resume-token design. Successful login creates an eight-hour, server-stored session represented only by an HTTP-only cookie; never expose or persist its opaque ID in browser JavaScript. Disconnect clears only live socket/presence/typing; it does not delete accounts, room memberships or messages. Read docs/implementation-ownership.md and docs/core-implementation-checklist.md before implementation. Development uses Node 24.19.0 with built-in node:sqlite/DatabaseSync and an ignored local SQLite file; cloud provider remains unselected.
+Full account registration/sign-in with saved history supersedes the earlier resume-token design. Successful login creates an eight-hour, server-stored session represented only by an HTTP-only cookie; never expose or persist its opaque ID in browser JavaScript. Disconnect clears only live socket/presence/typing; it does not delete accounts, room memberships or messages. Read docs/implementation-ownership.md and docs/core-implementation-checklist.md before implementation. Development uses Node 24.19.0 with built-in node:sqlite/DatabaseSync and an ignored local SQLite file.
 
 Enable bounded automatic transport reconnect. On a new connection, restore only a valid unexpired HTTP-only session cookie; otherwise require `auth.login` or `auth.register` before app commands. A name alone never authenticates an existing account or retrieves history. Store an Argon2id password hash only; never log passwords, expose credentials in URLs, or persist raw passwords. Still block disconnected emits and automatic write retries; use persistent clientMessageId deduplication for manual unknown-send retries.
 
@@ -25,3 +25,11 @@ Save durable mutations before acknowledgement. History, reactions and AI input m
 `AuthGate` owns the browser's live Socket.IO connection through `useAccountAuth`. Conversation UI should consume its authenticated socket/snapshot and guarded `request` callback; do not mount another connection-status socket alongside it. Sign-out removes all room delivery subscriptions before the connection can authenticate as a different account.
 
 Preserve the user-supplied SVGs in docs/wireframes/ as the current UI/brand reference. docs/implementation-ownership.md supersedes its outdated authentication and special-feature selections: room-scoped typing and Saint’s AI-selected emoji firework are selected; AI Voice Chat and tomato reactions are not. Do not restore the removed generated chat-ui.html or supersede Figma with it. Public group member details must include offline members while the online directory lists only connected users.
+
+## Compose delivery
+
+Release commands live in `cloudbuild.yaml`; GitHub Actions is for PR checks; do not add `deploy.sh`, `smoke.mjs`, or app systemd units. Keep the Compose project/volume names stable across release directories. Never print resolved private configuration; validate with `docker compose config --quiet`.
+
+The compiled backend image must include `schema.sql` and the emoji catalog beside their emitted JavaScript modules. Preserve the schema-change guard and consistent SQLite backup before activation.
+
+Production AI tokens are fetched from Secret Manager into backend memory through the GCE metadata identity. Pass only the account ID and pinned numeric secret-version reference through Compose; never inject the token into builds, images, Compose environment files, or logs. Keep the runtime identity scoped to the app registry and AI secret.
