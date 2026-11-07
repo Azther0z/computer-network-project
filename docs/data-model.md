@@ -1,13 +1,16 @@
-# Talkmato data model
+# Data model and visibility
 
-Talkmato persists accounts, rooms, memberships, messages and AI emoji attachments in one SQLite database. Development uses Node `24.19.0` with `node:sqlite` / `DatabaseSync`; each developer’s ignored database file is `backend/data/talkmato.dev.sqlite`. Tests use `:memory:` and isolated temporary databases under ignored `work/`. `backend/src/database/storage.ts` owns database opening, schema initialization and transactions.
-
-This document reflects full account registration/sign-in with eight-hour server sessions. The browser holds no resume token or password; its opaque session ID exists only in an HTTP-only cookie. See [architecture](architecture.md), [protocol](websocket-protocol.md), [implementation ownership](implementation-ownership.md) and the [core checklist](core-implementation-checklist.md).
-
-## Durable entities
+[Storage](../backend/src/database/storage.ts) owns one built-in `node:sqlite` / `DatabaseSync` connection. [schema.sql](../backend/src/database/schema.sql) defines the tables and constraints. Storage initialization handles compatible additions. There are no separate committed reset or migration scripts.
 
 ```mermaid
 erDiagram
+    USER["User"]
+    LOGIN_SESSION["Login session"]
+    MEMBERSHIP["Membership"]
+    ROOM["Room"]
+    MESSAGE["Message"]
+    MESSAGE_EMOJI["Emoji attachment"]
+    USER ||--o{ LOGIN_SESSION : authenticates
     USER ||--o{ MEMBERSHIP : joins
     ROOM ||--o{ MEMBERSHIP : contains
     ROOM ||--o{ MESSAGE : stores
@@ -15,67 +18,35 @@ erDiagram
     MESSAGE ||--o{ MESSAGE_EMOJI : attaches
 ```
 
-| Entity | Fields | Constraints |
-| --- | --- | --- |
-| User | `userId`, `name`, `canonicalName`, `passwordHash`, `createdAt` | `canonicalName` is globally unique, including offline users. Store an Argon2id password hash only. |
-| Room | `roomId`, `kind`, optional group `name`, optional `privatePairKey` | `kind` is `private` or `group`; canonical private pair key is unique. |
-| Membership | `roomId`, `userId`, `visibleFromSeq`, `joinedAt` | One membership per room/user; group creator is initial member; self-join only. |
-| Message | `seq`, `messageId`, `roomId`, `senderId`, `clientMessageId`, `text`, `sentAt` | Server assigns monotonic sequence/time/sender; unique `(senderId, clientMessageId)`. |
-| MessageEmoji | `emojiId`, `messageId`, `emoji`, `createdAt` | Storage transactions save only the first result per message. The existing unique `(messageId, emoji)` schema preserves legacy multi-emoji messages; internal `seq` orders attachments. |
-| LoginSession | opaque `sessionId`, `userId`, `expiresAt`, `createdAt` | Server-only eight-hour session; its ID is sent only in an HTTP-only cookie. |
+## Durable records
 
-All IDs except `seq` are opaque strings. Times use UTC ISO 8601. Keep `seq` in JavaScript’s safe-integer range. Socket IDs, online status and typing state are runtime-only and never stored as durable identity.
+The names below use the internal TypeScript form. SQL uses snake_case. Public response shapes belong to [the protocol](websocket-protocol.md#public-data).
 
-## Required schema constraints and indexes
-
-- `users.canonicalName` is unique.
-- `rooms.privatePairKey` is unique when present.
-- `memberships(roomId, userId)` is unique.
-- `messages(senderId, clientMessageId)` is unique.
-- `message_emojis(messageId, emoji)` is unique; its message foreign key prevents orphaned attachments. Schema initialization adds the table to existing databases without replacing history.
-- Index `messages(roomId, seq)` for history pagination.
-- Foreign keys are enabled and protect related records.
-- Generated `.sqlite`, `-wal` and `-shm` files are ignored by Git; `schema.sql` and reset/migration scripts are committed.
-
-## Authentication and runtime state
-
-`auth.register` atomically reserves the canonical name, writes an Argon2id password hash, and authenticates the current socket only after the write succeeds. `auth.login` verifies the stored hash and binds the account to the current socket. The browser then exchanges that authenticated socket ID for an eight-hour HTTP-only session cookie; the opaque session ID is never returned in a DTO or saved in browser JavaScript. Passwords are not saved in browser storage, database logs, DTOs or source control.
-
-`activeSocketByUserId` is runtime state. Only one active socket is allowed for an account; a second login gets `SESSION_IN_USE`. Disconnect clears live authentication/presence and typing, but does not delete durable data. An unexpired cookie session may restore a later Socket.IO connection; sign-out deletes that session and clears the cookie.
-
-Account deletion is a durable tombstone, not a foreign-key-breaking row deletion. It revokes sessions, clears credentials, marks the user deleted and releases the canonical name. Queries for public users/group members exclude tombstones; message history resolves a deleted sender as `<Unknown>`. A remaining private-chat peer also sees `<Unknown>`. A newly registered account with the former name receives a new opaque user ID and no old history.
-
-## Transactions and visibility
-
-- Private-room creation inserts the unique pair room and both memberships in one transaction. Reopening returns the existing room.
-- Group creation inserts only the creator as a member.
-- On a first group join, write `visibleFromSeq = current maximum message seq + 1` in the join transaction. Repeated join or future sign-in never changes it.
-- Every room/history/message/typing/AI request derives the actor from the authenticated socket, then checks persisted membership. Never trust a client-supplied sender ID, membership claim or history cursor as permission.
-- Group history/message visibility requires `message.seq >= membership.visibleFromSeq`. Private participants may see all messages in their private room.
-- `room.send` inserts the message before acknowledgement or live delivery. An identical retry returns the existing message without another insert/broadcast; reusing the key for different room/text returns `CLIENT_MESSAGE_ID_CONFLICT`.
-
-## Public DTOs
-
-| DTO | Fields |
+| Record | Main fields and constraints |
 | --- | --- |
-| User | `userId`, `name`, `online: boolean` |
-| PrivateRoom | `roomId`, `kind: "private"`, `members: User[2]` |
-| Group | `roomId`, `kind: "group"`, `name`, `members: User[]` |
-| Message | `seq`, `messageId`, `clientMessageId`, `roomId`, `senderId`, `senderName`, `text`, `sentAt`, `emojis: MessageEmoji[]` |
-| MessageEmoji | `emojiId`, `emoji`, `createdAt` |
-| AccountSnapshot | `self: User`, `users: User[]`, `groups: Group[]`, `privateRooms: PrivateRoom[]` |
-| HistoryPage | `roomId`, `messages: Message[]`, `nextBeforeSeq: number or null`, `highWatermarkSeq: number` |
+| User | `userId`, `name`, `canonicalName`, Argon2id `passwordHash`, `createdAt`, optional `deletedAt`. Canonical names are unique, including offline accounts. |
+| LoginSession | Opaque `sessionId`, `userId`, `createdAt`, `expiresAt`. The lifetime is eight hours. The ID travels only in an HTTP-only cookie. |
+| Room | `roomId`, `kind`, `createdAt`, group `name` or unique `privatePairKey`. A private pair has one room. |
+| Membership | `(roomId, userId)` primary key, `visibleFromSeq`, `joinedAt`. The first group join permanently sets visibility. |
+| Message | Global `seq`, unique `messageId`, `roomId`, `senderId`, `clientMessageId`, `text`, `sentAt`. `(senderId, clientMessageId)` is unique. |
+| MessageEmoji | Internal `seq`, unique `emojiId`, `messageId`, `emoji`, `createdAt`. `(messageId, emoji)` is unique. The current write path saves the first result only and preserves legacy multi-emoji records. |
 
-`users.snapshot` includes authenticated online users only, including self. Group and private member details include offline users. Password hashes, raw passwords, socket IDs, private-room lists and message history are never returned to unrelated users.
+IDs are opaque strings except numeric sequences. Times use UTC ISO 8601. Message sequences stay within JavaScript's safe-integer range. Foreign keys protect relationships. `messages(room_id, seq)` supports room-history queries. `login_sessions(expires_at)` supports session lookup/cleanup.
 
-## History synchronization
+## Authorization and transactions
 
-`room.history` returns the newest 50 accessible messages by default (maximum 100), or older messages before an exclusive `beforeSeq`. Pages are ascending by `seq`; `nextBeforeSeq` is the oldest returned sequence only when another accessible older page exists. `highWatermarkSeq` is the largest accessible room sequence at the query snapshot.
+Private-room creation writes the pair room and both memberships in one transaction. A new group writes only its creator's membership. Others join themselves.
 
-On successful sign-in, replace public/authorized room metadata. Keep an authorized selected room, request fresh history, and merge concurrent live messages by `messageId`/`seq`. Never deduplicate messages by text. The UI must remain read-only while unauthenticated or disconnected.
+The first group join records `visibleFromSeq = current maximum message seq + 1` in the same transaction. The maximum is global across the database. Repeated joins and later sign-ins retain the original boundary.
 
-## Transient and AI data
+Every history, send, typing, and AI request checks persisted membership. Group history and selected AI messages also require `message.seq >= membership.visibleFromSeq`. Private participants can read all saved messages in their room. Client IDs, cursors, and delivery subscriptions do not grant access.
 
-Typing is runtime-only: room/user/short-expiry state, cleared on send, empty draft, room switch, logout, disconnect or expiry. It is not persisted or replayed.
+A new message commits before delivery or success acknowledgement. An identical retry returns the saved message without another insert or broadcast. Reusing its key for another room/text returns `CLIENT_MESSAGE_ID_CONFLICT`.
 
-AI emoji attachments are durable. Before returning a saved result or sending text to a provider, verify message visibility under the membership/history rules. Existing results return without another provider call. For a new result, send only message text and the allow-list; recheck identity and visibility afterward, then commit the first attachment before acknowledgement or delivery. Per-message in-flight exclusion and the storage transaction prevent a second selection. Emit only to authenticated members whose join boundary permits the message. History returns saved attachments only with authorized messages. Existing multi-emoji data is preserved. Firework animation and local replay state remain transient browser state.
+## Deletion and lifetime
+
+Account deletion writes a tombstone, revokes its sessions, clears credentials, and releases its canonical name. It does not remove messages. Public group-member queries omit the deleted account. Messages and the remaining private peer display `<Unknown>`. A new account with the former name gets a new user ID and no old history.
+
+SQLite retains accounts, sessions, rooms, memberships, messages, and emoji attachments across restart when its file is persistent. Socket IDs, presence, typing, drafts, selected-room state, and firework replay state are temporary. The [UI reference](ui-ux.md) distinguishes its display cache from authenticated identity.
+
+Development stores an ignored file at `backend/data/talkmato.dev.sqlite`. Tests use `:memory:` or isolated files under ignored `work/`. Generated SQLite, WAL, and SHM files stay outside Git. Public delivery uses a persistent volume and the schema-change/backup safeguards in [deployment](deployment.md).
