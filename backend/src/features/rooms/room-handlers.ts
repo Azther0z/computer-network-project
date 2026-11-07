@@ -1,12 +1,12 @@
-import { requireActor } from './auth-context.js';
-import { Storage } from './storage.js';
+import { requireActor } from '../auth/auth-context.js';
+import { Storage } from '../../database/storage.js';
 import {
   DomainError,
   type AuthenticatedActor,
   type MessageRecord,
   type RoomRecord,
   type UserRecord,
-} from './types.js';
+} from '../../lib/types.js';
 
 type Ack = (response: AckResponse<unknown>) => void;
 

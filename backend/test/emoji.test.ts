@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import test from 'node:test';
-import { allowedEmoji, DEFAULT_EMOJI, emojiCatalog } from '../src/emoji/catalog.js';
-import { ClefSelector, EmojiError } from '../src/emoji/clef.js';
-import { EmojiEffects } from '../src/emoji/handlers.js';
-import { Storage } from '../src/storage.js';
-import type { AuthenticatedActor, MessageEmoji } from '../src/types.js';
+import { allowedEmoji, DEFAULT_EMOJI, emojiCatalog } from '../src/features/emoji/catalog.js';
+import { ClefSelector, EmojiError } from '../src/features/emoji/clef.js';
+import { EmojiEffects } from '../src/features/emoji/handlers.js';
+import { Storage } from '../src/database/storage.js';
+import type { AuthenticatedActor, MessageEmoji } from '../src/lib/types.js';
 
 type Response = { ok: true; data: { emoji: string; attachment: MessageEmoji } } | { ok: false; error: { code: string; message: string } };
 class FakeSocket {

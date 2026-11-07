@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
-import { useAccountAuth, type AccountAuth } from '../../lib/use-account-auth';
-import type { AuthMode } from '../../lib/account-types';
+import { useAccountAuth, type AccountAuth } from './use-account-auth';
+import type { AuthMode } from '../../../lib/account-types';
 import { RegisterForm, SignInForm } from './account-form';
 import { AccountDirectory } from './account-directory';
-import { Brand } from './brand';
+import { Brand } from '../../ui/brand';
 import styles from './auth.module.css';
 
 type SignedIn = AccountAuth & {

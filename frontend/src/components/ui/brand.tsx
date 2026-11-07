@@ -1,5 +1,5 @@
 import Image from 'next/image';
-import styles from './auth.module.css';
+import styles from '../feature/auth/auth.module.css';
 
 export function Brand() {
   return <div className={styles.brand}>

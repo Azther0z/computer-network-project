@@ -72,7 +72,7 @@ Socket.IO channels are delivery caches, never authorization. A handler must deri
 
 ## Storage and deployment impact
 
-`backend/src/storage.ts` owns the single `DatabaseSync` instance, schema initialization, parameterized statements and transactions. Enable foreign keys and set a small busy timeout. Keep durable writes transactional before acknowledgement. The committed schema/reset scripts are the reproducible source of truth; generated database files are not committed.
+`backend/src/database/storage.ts` owns the single `DatabaseSync` instance, schema initialization, parameterized statements and transactions. Enable foreign keys and set a small busy timeout. Keep durable writes transactional before acknowledgement. The committed schema/reset scripts are the reproducible source of truth; generated database files are not committed.
 
 A SQLite file on an ephemeral cloud filesystem does not preserve history after restart/redeploy. Public deployment therefore needs one backend instance and persistent storage before claiming durable history. No Redis, message broker or multiple backend workers are in scope.
 

@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
-import type { AccountSnapshot, Ack, AuthMode } from './account-types';
-import type { ChatUser } from './chat-types';
+import type { AccountSnapshot, Ack, AuthMode } from '../../../lib/account-types';
+import type { ChatUser } from '../../../lib/chat-types';
 
 const errors: Record<string, string> = {
   INVALID_CREDENTIALS: 'Name or password is incorrect.',

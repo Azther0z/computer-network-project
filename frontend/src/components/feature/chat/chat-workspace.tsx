@@ -4,11 +4,11 @@ import { FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useS
 
 import type { AccountSnapshot, Ack } from '@/lib/account-types';
 import type { ChatMessage, GroupRoom, MessageEmoji, MessageEmojiAdded, PrivateRoom } from '@/lib/chat-types';
-import { isMessageEmoji, mergeMessageEmojis } from '../lib/message-emojis';
-import type { AccountAuth } from '@/lib/use-account-auth';
+import { isMessageEmoji, mergeMessageEmojis } from '../../../lib/message-emojis';
+import type { AccountAuth } from '@/components/feature/auth/use-account-auth';
 
 import styles from './chat-workspace.module.css';
-import { MessageEmojiEffect } from './message-emoji-effect';
+import { MessageEmojiEffect } from './emoji/message-emoji-effect';
 
 type SignedInAccount = AccountAuth & {
   snapshot: AccountSnapshot;

@@ -30,16 +30,21 @@ Browsers connect directly to the backend. A new transport connection requires ac
 ```text
 frontend/                 # Next.js (React) UI
   src/app/                # Pages, layout and styles
-  src/components/auth/    # Register/sign-in forms, auth gate and live directory
-  src/lib/                # Shared client DTOs and authenticated Socket.IO lifecycle
+  src/components/feature/auth/ # Account forms, auth gate, directory and socket lifecycle
+  src/components/feature/chat/ # Chat workspace and AI emoji components
+  src/components/ui/      # Shared branding and reusable UI
+  src/lib/                # Client DTOs, helpers and demo data
 backend/                  # Node.js + Socket.IO + SQLite
   src/
     server.ts             # Server startup and configuration
-    auth-handlers.ts      # Argon2id accounts, socket identity and live presence
-    storage.ts            # Persistent accounts, rooms and message queries
-    schema.sql            # Database tables and constraints
-    types.ts              # Backend data and event types
-  test/storage.test.ts    # Storage behavior tests
+    features/auth/        # Argon2id accounts, socket identity and live presence
+    features/rooms/       # Private/group rooms, membership and messages
+    features/typing/      # Transient room-scoped typing status
+    features/emoji/       # AI emoji selection, catalog and delivery
+    database/storage.ts   # Persistent accounts, rooms and message queries
+    database/schema.sql   # Database tables and constraints
+    lib/types.ts          # Backend data and event types
+  test/                   # Storage, authentication, room and AI tests
   data/                   # Ignored local SQLite database files
 docs/                     # Requirements, design and Figma SVGs
 compose.yaml              # Frontend, backend, Caddy, and persistent volumes
@@ -70,4 +75,4 @@ Saved emoji buttons replace the diamond in the same position beside the message 
 
 For local development, the backend reads `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_AUTH_TOKEN` from its private process environment. On GCE, pass the account ID and a numeric `CLOUDFLARE_TOKEN_SECRET_VERSION` resource reference instead; the backend fetches that version from Secret Manager at startup using the VM identity and keeps the token in memory. See the [deployment guide](docs/deployment.md) for IAM and rotation. Keep tokens out of browser variables, URLs and Git. Without available credentials, core chat still works and AI requests return `AI_UNAVAILABLE`.
 
-The curated set of 240 emojis is bundled in `backend/src/emoji/catalog-data.ts` and uses default yellow and gender-neutral forms where available. Each selection sends the entire subset in one Clef Choice question, within its 255-option limit. Clef is instructed to choose 🍅 for unclear or unmatched messages. A structurally valid response with an unrecognized choice also becomes 🍅; malformed responses, timeouts and provider failures still show a retryable error. The implementation does not guarantee that every valid emoji matches the message meaning. See the [WebSocket protocol](docs/websocket-protocol.md) for request limits and authorization rules.
+The curated set of 240 emojis is bundled in `backend/src/features/emoji/catalog-data.ts` and uses default yellow and gender-neutral forms where available. Each selection sends the entire subset in one Clef Choice question, within its 255-option limit. Clef is instructed to choose 🍅 for unclear or unmatched messages. A structurally valid response with an unrecognized choice also becomes 🍅; malformed responses, timeouts and provider failures still show a retryable error. The implementation does not guarantee that every valid emoji matches the message meaning. See the [WebSocket protocol](docs/websocket-protocol.md) for request limits and authorization rules.

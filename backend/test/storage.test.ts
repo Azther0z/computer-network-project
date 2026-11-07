@@ -4,8 +4,8 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { DomainError } from '../src/types.js';
-import { Storage } from '../src/storage.js';
+import { DomainError } from '../src/lib/types.js';
+import { Storage } from '../src/database/storage.js';
 
 function createStorageWithUsers(): { storage: Storage; aliceId: string; bobId: string; charlieId: string } {
   const storage = new Storage(':memory:');

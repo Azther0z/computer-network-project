@@ -1,4 +1,4 @@
-import type { AuthenticatedActor } from './types.js';
+import type { AuthenticatedActor } from '../../lib/types.js';
 
 type ActorSocket = {
   data: { actor?: AuthenticatedActor };

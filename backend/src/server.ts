@@ -3,12 +3,12 @@ import { resolve } from 'node:path';
 
 import { Server } from 'socket.io';
 
-import { registerRoomHandlers } from './room-handlers.js';
-import { AuthPresence } from './auth-handlers.js';
-import { Storage } from './storage.js';
-import { TypingPresence } from './typing-handlers.js';
-import { ClefSelector } from './emoji/clef.js';
-import { EmojiEffects } from './emoji/handlers.js';
+import { registerRoomHandlers } from './features/rooms/room-handlers.js';
+import { AuthPresence } from './features/auth/auth-handlers.js';
+import { Storage } from './database/storage.js';
+import { TypingPresence } from './features/typing/typing-handlers.js';
+import { ClefSelector } from './features/emoji/clef.js';
+import { EmojiEffects } from './features/emoji/handlers.js';
 import { loadAiCredentials } from './ai-credentials.js';
 
 const port = Number(process.env.PORT ?? 8080);

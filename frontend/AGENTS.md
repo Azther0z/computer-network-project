@@ -1,3 +1,7 @@
+## Frontend organization
+
+Group feature components and hooks under `src/components/feature/auth/` and `src/components/feature/chat/`. Keep shared UI in `src/components/ui/`, and DTOs, pure helpers and demo data in `src/lib/`. Keep tests and CSS modules beside their related components. `use-account-auth.ts` belongs to the auth feature and remains the single live authenticated socket owner.
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 ## This is NOT the Next.js you know

@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
-import type { ChatMessage, MessageEmoji } from '../lib/chat-types';
+import type { ChatMessage, MessageEmoji } from '../../../lib/chat-types';
 import { ChatWorkspace } from './chat-workspace';
 
 afterEach(() => { cleanup(); vi.useRealTimers(); });

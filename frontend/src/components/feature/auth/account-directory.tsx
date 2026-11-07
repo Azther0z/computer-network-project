@@ -1,7 +1,7 @@
 import Image from 'next/image';
-import type { AccountSnapshot } from '../../lib/account-types';
-import type { ChatUser } from '../../lib/chat-types';
-import { Brand } from './brand';
+import type { AccountSnapshot } from '../../../lib/account-types';
+import type { ChatUser } from '../../../lib/chat-types';
+import { Brand } from '../../ui/brand';
 import styles from './auth.module.css';
 
 function Avatar({ user, index = 0 }: { user: ChatUser; index?: number }) {

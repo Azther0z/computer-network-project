@@ -2,8 +2,8 @@ import { randomBytes } from 'node:crypto';
 import { argon2id, hash, verify } from 'argon2';
 import type { Server, Socket } from 'socket.io';
 
-import { Storage } from './storage.js';
-import type { AuthenticatedActor, RoomRecord } from './types.js';
+import { Storage } from '../../database/storage.js';
+import type { AuthenticatedActor, RoomRecord } from '../../lib/types.js';
 
 export type PublicUser = AuthenticatedActor & { online: boolean };
 type PublicRoom = { roomId: string; kind: 'private' | 'group'; name?: string; members: PublicUser[] };

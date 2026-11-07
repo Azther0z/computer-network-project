@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { registerRoomHandlers } from '../src/room-handlers.js';
-import { Storage } from '../src/storage.js';
-import type { AuthenticatedActor } from '../src/types.js';
+import { registerRoomHandlers } from '../src/features/rooms/room-handlers.js';
+import { Storage } from '../src/database/storage.js';
+import type { AuthenticatedActor } from '../src/lib/types.js';
 
 type AckResponse =
   | { ok: true; data: Record<string, unknown> }

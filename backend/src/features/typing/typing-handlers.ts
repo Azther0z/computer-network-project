@@ -1,6 +1,6 @@
-import { requireActor } from './auth-context.js';
-import { Storage } from './storage.js';
-import { DomainError, type AuthenticatedActor } from './types.js';
+import { requireActor } from '../auth/auth-context.js';
+import { Storage } from '../../database/storage.js';
+import { DomainError, type AuthenticatedActor } from '../../lib/types.js';
 
 const EXPIRY_MS = 3_000;
 const ACTIVE_THROTTLE_MS = 500;

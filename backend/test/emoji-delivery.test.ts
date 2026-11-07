@@ -4,11 +4,11 @@ import { createServer } from 'node:http';
 import test, { type TestContext } from 'node:test';
 import { Server } from 'socket.io';
 import { io as connect, type Socket } from 'socket.io-client';
-import { AuthPresence } from '../src/auth-handlers.js';
-import { EmojiEffects } from '../src/emoji/handlers.js';
-import { registerRoomHandlers } from '../src/room-handlers.js';
-import { Storage } from '../src/storage.js';
-import type { MessageEmoji, MessageRecord } from '../src/types.js';
+import { AuthPresence } from '../src/features/auth/auth-handlers.js';
+import { EmojiEffects } from '../src/features/emoji/handlers.js';
+import { registerRoomHandlers } from '../src/features/rooms/room-handlers.js';
+import { Storage } from '../src/database/storage.js';
+import type { MessageEmoji, MessageRecord } from '../src/lib/types.js';
 
 type Added = { roomId: string; messageId: string; attachment: MessageEmoji };
 

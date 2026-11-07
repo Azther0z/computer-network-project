@@ -12,6 +12,8 @@ The ingestion manifests include human/agent visual-review status. A parser rerun
 
 ## Chat implementation boundaries
 
+Backend feature handlers live under `backend/src/features/`; SQLite storage and its colocated schema live under `backend/src/database/`; shared server types live under `backend/src/lib/`. Keep `backend/src/server.ts` as the composition entry point and backend tests under `backend/test/`.
+
 Browsers use socket.io-client directly with one Node.js/Socket.IO backend process; Next.js does not relay chat. Both ends use WebSocket-only transport and the default Socket.IO adapter. Durable storage does not justify multiple workers without shared routing design.
 
 Full account registration/sign-in with saved history supersedes the earlier resume-token design. Successful login creates an eight-hour, server-stored session represented only by an HTTP-only cookie; never expose or persist its opaque ID in browser JavaScript. Disconnect clears only live socket/presence/typing; it does not delete accounts, room memberships or messages. Read docs/implementation-ownership.md and docs/core-implementation-checklist.md before implementation. Development uses Node 24.19.0 with built-in node:sqlite/DatabaseSync and an ignored local SQLite file.

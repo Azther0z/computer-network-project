@@ -79,7 +79,7 @@ steps:
       done > work/delivery/images.env
       printf 'CLOUDFLARE_ACCOUNT_ID=%s\nCLOUDFLARE_TOKEN_SECRET_VERSION=%s\n' \
         "$_CLOUDFLARE_ACCOUNT_ID" "$_CLOUDFLARE_TOKEN_SECRET_VERSION" >> work/delivery/images.env
-      sha256sum backend/src/schema.sql | cut -d ' ' -f 1 > work/delivery/schema.sha256
+      sha256sum backend/src/database/schema.sql | cut -d ' ' -f 1 > work/delivery/schema.sha256
       flags=(--project="$PROJECT_ID" --zone="$_ZONE" --tunnel-through-iap --quiet --ssh-key-expire-after=15m)
       incoming="talkmato-incoming/$release_id"
       gcloud compute ssh "$_INSTANCE" "${flags[@]}" --command="install -d -m 0700 $incoming/deploy"

@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import type { Ack } from '@/lib/account-types';
 import type { MessageEmoji } from '@/lib/chat-types';
-import { isMessageEmoji, mergeMessageEmojis } from '../lib/message-emojis';
+import { isMessageEmoji, mergeMessageEmojis } from '../../../../lib/message-emojis';
 import { createFireworkRun, EmojiFirework, type FireworkRun } from './emoji-firework';
 import styles from './message-emoji-effect.module.css';
 

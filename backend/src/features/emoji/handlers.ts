@@ -1,6 +1,6 @@
-import { requireActor } from '../auth-context.js';
-import { Storage } from '../storage.js';
-import { DomainError, type AuthenticatedActor, type MessageEmoji } from '../types.js';
+import { requireActor } from '../auth/auth-context.js';
+import { Storage } from '../../database/storage.js';
+import { DomainError, type AuthenticatedActor, type MessageEmoji } from '../../lib/types.js';
 import { allowedEmoji } from './catalog.js';
 import { EmojiError, type EmojiSelector } from './clef.js';
 

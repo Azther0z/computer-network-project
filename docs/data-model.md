@@ -1,6 +1,6 @@
 # Talkmato data model
 
-Talkmato persists accounts, rooms, memberships, messages and AI emoji attachments in one SQLite database. Development uses Node `24.19.0` with `node:sqlite` / `DatabaseSync`; each developer’s ignored database file is `backend/data/talkmato.dev.sqlite`. Tests use `:memory:` and isolated temporary databases under ignored `work/`. `backend/src/storage.ts` owns database opening, schema initialization and transactions.
+Talkmato persists accounts, rooms, memberships, messages and AI emoji attachments in one SQLite database. Development uses Node `24.19.0` with `node:sqlite` / `DatabaseSync`; each developer’s ignored database file is `backend/data/talkmato.dev.sqlite`. Tests use `:memory:` and isolated temporary databases under ignored `work/`. `backend/src/database/storage.ts` owns database opening, schema initialization and transactions.
 
 This document reflects full account registration/sign-in with eight-hour server sessions. The browser holds no resume token or password; its opaque session ID exists only in an HTTP-only cookie. See [architecture](architecture.md), [protocol](websocket-protocol.md), [implementation ownership](implementation-ownership.md) and the [core checklist](core-implementation-checklist.md).
 

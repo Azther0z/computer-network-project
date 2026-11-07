@@ -6,10 +6,10 @@ import type { TestContext } from 'node:test';
 import { Server } from 'socket.io';
 import { io as connect, type Socket } from 'socket.io-client';
 import { verify } from 'argon2';
-import { AuthPresence } from '../src/auth-handlers.js';
-import { registerRoomHandlers } from '../src/room-handlers.js';
-import { Storage } from '../src/storage.js';
-import { TypingPresence } from '../src/typing-handlers.js';
+import { AuthPresence } from '../src/features/auth/auth-handlers.js';
+import { registerRoomHandlers } from '../src/features/rooms/room-handlers.js';
+import { Storage } from '../src/database/storage.js';
+import { TypingPresence } from '../src/features/typing/typing-handlers.js';
 
 async function setup(t: TestContext) {
   const storage = new Storage(':memory:');

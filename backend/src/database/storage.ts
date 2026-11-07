@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 
-import { DomainError, type MembershipRecord, type MessageEmoji, type MessageRecord, type RoomRecord, type UserRecord } from './types.js';
+import { DomainError, type MembershipRecord, type MessageEmoji, type MessageRecord, type RoomRecord, type UserRecord } from '../lib/types.js';
 
 const schemaPath = new URL('./schema.sql', import.meta.url);
 const schemaSql = readFileSync(schemaPath, 'utf8');

@@ -1,4 +1,4 @@
-import { ChatApp } from '@/components/chat-app';
+import { ChatApp } from '@/components/feature/chat/chat-app';
 
 import styles from './page.module.css';
 

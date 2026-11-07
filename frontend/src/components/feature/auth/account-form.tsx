@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import type { AuthMode } from '../../lib/account-types';
+import type { AuthMode } from '../../../lib/account-types';
 import styles from './auth.module.css';
 
 type Props = {

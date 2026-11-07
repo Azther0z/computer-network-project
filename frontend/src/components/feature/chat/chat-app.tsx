@@ -1,6 +1,6 @@
 'use client';
 
-import { AuthGate } from './auth/auth-gate';
+import { AuthGate } from '../auth/auth-gate';
 import { ChatWorkspace } from './chat-workspace';
 
 /** Keeps AuthGate's render callback inside the client component boundary. */
