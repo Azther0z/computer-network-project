@@ -1,10 +1,10 @@
 import { requireActor } from '../auth/auth-context.js';
 import { Storage } from '../../database/storage.js';
+import { toPublicRoom, type PublicUser } from '../../lib/public-room.js';
 import {
   DomainError,
   type AuthenticatedActor,
   type MessageRecord,
-  type RoomRecord,
   type UserRecord,
 } from '../../lib/types.js';
 
@@ -64,8 +64,6 @@ function expectAck(value: unknown): Ack | undefined {
   return typeof value === 'function' ? (value as Ack) : undefined;
 }
 
-type PublicUser = { userId: string; name: string; online: boolean };
-
 type RoomHandlerDependencies = {
   isOnline(userId: string): boolean;
   toPublicUser(user: UserRecord): PublicUser;
@@ -86,16 +84,6 @@ const defaultDependencies: RoomHandlerDependencies = {
 
 function asMessage(message: MessageRecord, senderName: string) {
   return { ...message, senderName };
-}
-
-function asRoom(storage: Storage, room: RoomRecord, dependencies: RoomHandlerDependencies) {
-  return {
-    roomId: room.roomId,
-    kind: room.kind,
-    ...(room.name === null ? {} : { name: room.name }),
-    members: (room.kind === 'private' ? storage.getPrivateRoomMembers(room.roomId) : storage.getRoomMembers(room.roomId))
-      .map(dependencies.toPublicUser),
-  };
 }
 
 function acknowledge<T>(ack: Ack | undefined, work: () => T): void {
@@ -150,7 +138,7 @@ export function registerRoomHandlers(
       }
       const created = existing === undefined;
       const room = existing ?? storage.findOrCreatePrivateRoom(actor.userId, peerId);
-      const publicRoom = asRoom(storage, room, dependencies);
+      const publicRoom = toPublicRoom(storage, room, dependencies.toPublicUser);
       // Delivery channels are caches only. Put both live private members into the
       // new room after its persisted memberships have committed.
       void socket.join(roomChannel(room.roomId));
@@ -175,7 +163,7 @@ export function registerRoomHandlers(
 
       const group = storage.createGroup(actor.userId, name);
       void socket.join(roomChannel(group.roomId));
-      const publicGroup = asRoom(storage, group, dependencies);
+      const publicGroup = toPublicRoom(storage, group, dependencies.toPublicUser);
       dependencies.broadcastDirectories();
       return { group: publicGroup };
     });
@@ -192,7 +180,7 @@ export function registerRoomHandlers(
         throw new DomainError('ROOM_NOT_FOUND', 'Room was not found.');
       }
       void socket.join(roomChannel(roomId));
-      const publicGroup = asRoom(storage, room, dependencies);
+      const publicGroup = toPublicRoom(storage, room, dependencies.toPublicUser);
       dependencies.broadcastDirectories();
       return { group: publicGroup };
     });

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { ChatMessage, MessageEmoji } from '../../../lib/chat-types';
@@ -26,13 +26,15 @@ function setup(saved: MessageEmoji[] = []) {
     : Promise.resolve({ ok: true, data: {} }));
   const self = { userId: 'alice', name: 'Alice', online: true };
   const snapshot = { self, users: [self], privateRooms: [], groups: [
-    { roomId: 'room-one', kind: 'group', name: 'Study', members: [self] },
+    { roomId: 'room-one', kind: 'group', name: 'Study', members: [self, { userId: 'bob', name: 'Bob', online: false }] },
     { roomId: 'room-two', kind: 'group', name: 'Other', members: [self] },
   ] };
-  const account = { snapshot, socket, request, busy: false, logout: vi.fn(), deleteAccount: vi.fn(), error: null } as unknown as ComponentProps<typeof ChatWorkspace>['account'];
+  const logout = vi.fn();
+  const deleteAccount = vi.fn().mockResolvedValue(false);
+  const account = { snapshot, socket, request, busy: false, logout, deleteAccount, error: null } as unknown as ComponentProps<typeof ChatWorkspace>['account'];
   const view = render(<ChatWorkspace account={account} />);
   return {
-    view, socket, request, listeners,
+    view, socket, request, listeners, logout, deleteAccount,
     emit: (event: string, value: unknown) => listeners.get(event)?.(value),
     finish: (roomId = 'room-one', emojis = saved) => finishHistory({ ok: true, data: {
       roomId, messages: roomId === 'room-one' ? [{ ...message, emojis }] : [],
@@ -69,6 +71,57 @@ test('a live attachment arriving before history survives stale history, duplicat
   expect(app.request.mock.calls.filter(([event]) => event === 'message.emojiSuggest')).toHaveLength(0);
   app.view.unmount();
   expect(app.listeners.has('message.emojiAdded')).toBe(false);
+});
+
+test('member details include offline members and close outside the popover or when switching rooms', async () => {
+  const app = setup();
+  fireEvent.click(screen.getByRole('button', { name: 'Study' }));
+  await act(async () => { app.finish(); });
+  const members = screen.getByRole('button', { name: '2 members' });
+  fireEvent.click(members);
+  const details = screen.getByRole('dialog', { name: 'Group members' });
+  const bob = within(details).getByText('Bob').closest('li')!;
+  expect(within(bob).getByText('Offline')).toBeTruthy();
+  fireEvent.pointerDown(within(details).getByText('Bob'));
+  expect(members.getAttribute('aria-expanded')).toBe('true');
+  fireEvent.pointerDown(document.body);
+  expect(screen.queryByRole('dialog', { name: 'Group members' })).toBeNull();
+  fireEvent.click(members);
+  fireEvent.click(screen.getByRole('button', { name: 'Other' }));
+  await act(async () => { app.finish('room-two'); });
+  expect(screen.queryByRole('dialog', { name: 'Group members' })).toBeNull();
+  expect(screen.getByRole('button', { name: '1 member' }).getAttribute('aria-expanded')).toBe('false');
+});
+
+test('sidebar and extracted dialogs keep group creation, deletion confirmation and logout wired to the account', async () => {
+  const app = setup();
+  const self = { userId: 'alice', name: 'Alice', online: true };
+  app.request.mockImplementation((event: string) => event === 'group.create'
+    ? Promise.resolve({ ok: true, data: { group: { roomId: 'created-room', kind: 'group', name: 'New group', members: [self] } } })
+    : Promise.resolve({ ok: true, data: { roomId: 'created-room', messages: [] } }));
+
+  fireEvent.click(screen.getByRole('button', { name: 'Create group' }));
+  const form = screen.getByRole('form', { name: 'Create group' });
+  expect((within(form).getByRole('button', { name: 'Create group' }) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.change(within(form).getByLabelText('Group name'), { target: { value: 'New group' } });
+  await act(async () => { fireEvent.submit(form); });
+  expect(app.request).toHaveBeenCalledWith('group.create', { name: 'New group' });
+  expect(screen.queryByRole('form', { name: 'Create group' })).toBeNull();
+  expect(screen.getByRole('heading', { name: 'New group' })).toBeTruthy();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Delete account' }));
+  const deletion = screen.getByRole('form', { name: 'Delete account?' });
+  const password = within(deletion).getByLabelText('Confirm password');
+  expect(password.getAttribute('type')).toBe('password');
+  expect((within(deletion).getByRole('button', { name: 'Delete permanently' }) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.change(password, { target: { value: 'synthetic-confirmation' } });
+  await act(async () => { fireEvent.submit(deletion); });
+  expect(app.deleteAccount).toHaveBeenCalledWith('synthetic-confirmation');
+  expect(within(deletion).getByRole('alert').textContent).toContain('Could not delete the account');
+  fireEvent.click(within(deletion).getByRole('button', { name: 'Cancel' }));
+  expect(screen.queryByRole('form', { name: 'Delete account?' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+  expect(app.logout).toHaveBeenCalledTimes(1);
 });
 
 test('saved history renders multiple emojis without an AI call, and replay is a local action', async () => {

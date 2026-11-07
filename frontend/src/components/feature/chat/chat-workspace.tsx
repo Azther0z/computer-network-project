@@ -6,9 +6,13 @@ import type { AccountSnapshot, Ack } from '@/lib/account-types';
 import type { ChatMessage, GroupRoom, MessageEmoji, MessageEmojiAdded, PrivateRoom } from '@/lib/chat-types';
 import { isMessageEmoji, mergeMessageEmojis } from '../../../lib/message-emojis';
 import type { AccountAuth } from '@/components/feature/auth/use-account-auth';
+import { roomTitle, selfFirst } from '../../../lib/room-display';
 
 import styles from './chat-workspace.module.css';
-import { MessageEmojiEffect } from './emoji/message-emoji-effect';
+import { ChatSidebar } from './chat-sidebar';
+import { GroupMemberDetails } from './group-member-details';
+import { ChatMessageRow } from './chat-message-row';
+import { CreateGroupDialog, DeleteAccountDialog } from './account-dialogs';
 
 type SignedInAccount = AccountAuth & {
   snapshot: AccountSnapshot;
@@ -21,11 +25,6 @@ type PrivateOpenResult = { room: PrivateRoom };
 type GroupResult = { group: Omit<GroupRoom, 'joined'> };
 type PendingMessage = { roomId: string; text: string; clientMessageId: string };
 type TypingUpdate = { roomId: string; userId: string; isTyping: boolean };
-
-function roomTitle(room: Room, selfId: string): string {
-  if (room.kind === 'group') return room.name;
-  return room.members.find((member) => member.userId !== selfId)?.name ?? 'Private chat';
-}
 
 function asJoinedGroup(group: Omit<GroupRoom, 'joined'>, selfId: string): GroupRoom {
   return { ...group, joined: group.members.some((member) => member.userId === selfId) };
@@ -44,17 +43,6 @@ function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]): ChatMes
     messages.set(message.messageId, { ...message, emojis: mergeMessageEmojis(previous?.emojis ?? [], message.emojis ?? []) });
   }
   return [...messages.values()].sort((left, right) => (left.seq ?? 0) - (right.seq ?? 0));
-}
-
-function selfFirst<T extends { userId: string }>(users: T[], selfId: string): T[] {
-  return [...users].sort((left, right) => Number(right.userId === selfId) - Number(left.userId === selfId));
-}
-
-function displayTime(value: string): string {
-  const date = new Date(value);
-  return Number.isNaN(date.valueOf())
-    ? value
-    : new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(date);
 }
 
 function errorMessage(response: Ack<unknown>): string {
@@ -91,13 +79,11 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
   const [error, setError] = useState<string | null>(null);
   const [pendingMessage, setPendingMessage] = useState<PendingMessage | null>(null);
   const [typingByRoom, setTypingByRoom] = useState<Record<string, string[]>>({});
-  const [showMemberDetails, setShowMemberDetails] = useState(false);
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const typingRoomRef = useRef<string | null>(null);
   const lastTypingUpdateRef = useRef(0);
-  const memberDetailsRef = useRef<HTMLDivElement>(null);
   const messageAreaRef = useRef<HTMLElement>(null);
 
   const rememberEmoji = useCallback(({ messageId, attachment }: MessageEmojiAdded) => {
@@ -187,19 +173,6 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
     });
     return () => window.cancelAnimationFrame(frame);
   }, [activeRoomId, activeMessages]);
-
-  useEffect(() => { setShowMemberDetails(false); }, [activeRoomId]);
-
-  useEffect(() => {
-    if (!showMemberDetails) return;
-    const handlePointerDown = (event: PointerEvent) => {
-      if (memberDetailsRef.current && !memberDetailsRef.current.contains(event.target as Node)) {
-        setShowMemberDetails(false);
-      }
-    };
-    document.addEventListener('pointerdown', handlePointerDown);
-    return () => document.removeEventListener('pointerdown', handlePointerDown);
-  }, [showMemberDetails]);
 
   useEffect(() => {
     if (!activeRoom || isGroupPreview) return;
@@ -323,89 +296,130 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
 
   return (
     <section className={styles.workspace} aria-label="Chat workspace">
-      <aside className={styles.sidebar}>
-        <div className={styles.brand}>
-          <img src="./talkmato-logo.svg" alt="Talkmato logo" />
-          <strong>Talkmato</strong>
-          <div className={styles.accountActions}><button type="button" className={styles.signOut} onClick={() => void account.logout()} disabled={account.busy}>Sign out</button></div>
-        </div>
-        <section>
-          <h2>Online now</h2>
-          <ul className={styles.userList}>
-            {selfFirst(snapshot.users, snapshot.self.userId).map((user) => <li key={user.userId}>
-              <button type="button" className={styles.personButton} onClick={() => void openPrivate(user.userId)} disabled={busy || user.userId === snapshot.self.userId}>
-                <span className={styles.onlineDot} aria-hidden="true" />{user.name}
-                {user.userId === snapshot.self.userId && <small>You</small>}
-              </button>
-            </li>)}
-          </ul>
-        </section>
-        <section>
-          <h2>Private chats</h2>
-          <ul className={styles.roomList}>
-            {privateRooms.length === 0 && <li className={styles.noRooms}>No private chats yet.</li>}
-            {privateRooms.map((room) => <li key={room.roomId}>
-              <button type="button" className={activeRoomId === room.roomId ? styles.activeRoom : undefined} onClick={() => setActiveRoomId(room.roomId)}>
-                {roomTitle(room, snapshot.self.userId)}
-              </button>
-            </li>)}
-          </ul>
-        </section>
-        <section>
-          <div className={styles.sectionHeading}>
-            <h2>Groups</h2><button type="button" onClick={() => setShowCreateGroup(true)} aria-label="Create group" disabled={busy}>+</button>
-          </div>
-          <ul className={styles.roomList}>
-            {groups.map((group) => <li key={group.roomId}>
-              <button type="button" className={activeRoomId === group.roomId ? styles.activeRoom : undefined} onClick={() => setActiveRoomId(group.roomId)}>
-                <span aria-hidden="true">#</span>{group.name}
-              </button>
-            </li>)}
-          </ul>
-        </section>
-        <div className={styles.sidebarFooter}><button type="button" className={styles.deleteAccount} onClick={() => { setDeleteError(null); setShowDeleteAccount(true); }} disabled={account.busy}>Delete account</button></div>
-      </aside>
+      <ChatSidebar
+        selfId={snapshot.self.userId}
+        users={snapshot.users}
+        privateRooms={privateRooms}
+        groups={groups}
+        activeRoomId={activeRoomId}
+        busy={busy}
+        accountBusy={account.busy}
+        onOpenPrivate={(userId) => void openPrivate(userId)}
+        onSelectRoom={setActiveRoomId}
+        onCreateGroup={() => setShowCreateGroup(true)}
+        onDeleteAccount={() => { setDeleteError(null); setShowDeleteAccount(true); }}
+        onLogout={() => void account.logout()}
+      />
 
       <main className={styles.conversation}>
         <div ref={setFireworkTarget} className={styles.fireworkLayer} data-firework-layer="" />
         {error && <p className={styles.error} role="alert">{error}</p>}
-        {pendingMessage && <button type="button" className={styles.retry} disabled={busy} onClick={() => void sendWithId(pendingMessage)}>Retry last message</button>}
-        {!activeRoom && <div className={styles.emptyState}><img className={styles.emptyStateIcon} src="./chat-conversation-icon.svg" alt="Chat icon" /><h1>Choose a conversation</h1><p>Select a person or group to open a room.</p></div>}
-        {activeRoom && <>
-          <header className={styles.roomHeader}>
-            <div><p>{activeRoom.kind === 'group' ? 'Group chat' : 'Private chat'}</p><h1>{roomTitle(activeRoom, snapshot.self.userId)}</h1></div>
-            {activeRoom.kind === 'group' && <div ref={memberDetailsRef} className={styles.memberDetails}><button type="button" className={styles.memberButton} aria-expanded={showMemberDetails} onClick={() => setShowMemberDetails((shown) => !shown)}>{activeRoom.members.length} {activeRoom.members.length === 1 ? 'member' : 'members'}</button>{showMemberDetails && <div className={styles.memberPopover} role="dialog" aria-label="Group members"><strong>Members</strong><ul>{selfFirst(activeRoom.members, snapshot.self.userId).map((member) => <li key={member.userId}><span>{member.name}</span><small>{member.userId === snapshot.self.userId ? 'You' : member.online ? 'Online' : 'Offline'}</small></li>)}</ul></div>}</div>}
-          </header>
-          {isGroupPreview ? <section className={styles.groupPreview}><h2>Join to see the conversation</h2><p>Members are visible before joining. Earlier messages remain private.</p><div className={styles.previewMembers}><h3>Current members</h3><ul>{selfFirst(activeRoom.members, snapshot.self.userId).map((member) => <li key={member.userId}>{member.name}</li>)}</ul></div><button type="button" onClick={() => void joinGroup(activeRoom)} disabled={busy}>Join group</button></section> : <>
-            <section ref={messageAreaRef} className={styles.messageArea}>
-            <ol className={`${styles.messages} ${activeMessages.length === 0 ? styles.messagesEmpty : ''}`} aria-label="Messages" aria-busy={loadingRoomId === activeRoom.roomId}>
-              {loadingRoomId === activeRoom.roomId && <li className={styles.noMessages}>Loading messages…</li>}
-              {loadingRoomId !== activeRoom.roomId && activeMessages.length === 0 && <li className={styles.noMessages}>No messages yet.</li>}
-              {activeMessages.map((message) => {
-                const own = message.senderId === snapshot.self.userId;
-                const showSender = !own && activeRoom.kind === 'group';
-                return <li key={message.messageId} className={`${styles.messageRow} ${own ? `${styles.ownMessageRow} ${styles.ownMessage}` : ''} ${showSender ? styles.groupMessageRow : ''}`}>
-                  {showSender && <strong className={styles.messageSender}>{message.senderName}</strong>}
-                  <div className={styles.messageBubble}><p>{message.text}</p><time>{displayTime(message.sentAt)}</time></div>
-                  <MessageEmojiEffect roomId={activeRoom.roomId} messageId={message.messageId} request={account.request}
-                    attachments={mergeMessageEmojis(message.emojis ?? [], liveEmojis[message.messageId] ?? [])} seenEmojiIds={seenEmojiIds.current} fireworkTarget={fireworkTarget}
-                    onAttachment={attachment => rememberEmoji({ roomId: activeRoom.roomId, messageId: message.messageId, attachment })} />
-                </li>;
-              })}
-            </ol>
-            <p className={styles.typingStatus} aria-live="polite">{typingNames.length === 1 ? `${typingNames[0]} is typing…` : typingNames.length > 1 ? `${typingNames.join(', ')} are typing…` : ''}</p>
-            </section>
-            <form className={styles.composer} onSubmit={sendMessage}>
-              <label className="srOnly" htmlFor="message-draft">Message {roomTitle(activeRoom, snapshot.self.userId)}</label>
-              <textarea id="message-draft" value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={handleMessageKeyDown} placeholder="Write a message…" rows={2} disabled={busy || loadingRoomId === activeRoom.roomId} />
-              <button type="submit" disabled={busy || loadingRoomId === activeRoom.roomId || !draft.trim()}>Send</button>
-            </form>
-          </>}
-        </>}
+        {pendingMessage && (
+          <button type="button" className={styles.retry} disabled={busy} onClick={() => void sendWithId(pendingMessage)}>
+            Retry last message
+          </button>
+        )}
+        {!activeRoom && (
+          <div className={styles.emptyState}>
+            <img className={styles.emptyStateIcon} src="./chat-conversation-icon.svg" alt="Chat icon" />
+            <h1>Choose a conversation</h1>
+            <p>Select a person or group to open a room.</p>
+          </div>
+        )}
+        {activeRoom && (
+          <>
+            <header className={styles.roomHeader}>
+              <div>
+                <p>{activeRoom.kind === 'group' ? 'Group chat' : 'Private chat'}</p>
+                <h1>{roomTitle(activeRoom, snapshot.self.userId)}</h1>
+              </div>
+              {activeRoom.kind === 'group' && (
+                <GroupMemberDetails key={activeRoom.roomId} members={activeRoom.members} selfId={snapshot.self.userId} />
+              )}
+            </header>
+            {isGroupPreview ? (
+              <section className={styles.groupPreview}>
+                <h2>Join to see the conversation</h2>
+                <p>Members are visible before joining. Earlier messages remain private.</p>
+                <div className={styles.previewMembers}>
+                  <h3>Current members</h3>
+                  <ul>
+                    {selfFirst(activeRoom.members, snapshot.self.userId).map((member) => (
+                      <li key={member.userId}>{member.name}</li>
+                    ))}
+                  </ul>
+                </div>
+                <button type="button" onClick={() => void joinGroup(activeRoom)} disabled={busy}>Join group</button>
+              </section>
+            ) : (
+              <>
+                <section ref={messageAreaRef} className={styles.messageArea}>
+                  <ol
+                    className={`${styles.messages} ${activeMessages.length === 0 ? styles.messagesEmpty : ''}`}
+                    aria-label="Messages"
+                    aria-busy={loadingRoomId === activeRoom.roomId}
+                  >
+                    {loadingRoomId === activeRoom.roomId && <li className={styles.noMessages}>Loading messages…</li>}
+                    {loadingRoomId !== activeRoom.roomId && activeMessages.length === 0 && (
+                      <li className={styles.noMessages}>No messages yet.</li>
+                    )}
+                    {activeMessages.map((message) => (
+                      <ChatMessageRow
+                        key={message.messageId}
+                        message={message}
+                        selfId={snapshot.self.userId}
+                        isGroup={activeRoom.kind === 'group'}
+                        request={account.request}
+                        attachments={mergeMessageEmojis(message.emojis ?? [], liveEmojis[message.messageId] ?? [])}
+                        seenEmojiIds={seenEmojiIds.current}
+                        fireworkTarget={fireworkTarget}
+                        onAttachment={(attachment) => rememberEmoji({ roomId: activeRoom.roomId, messageId: message.messageId, attachment })}
+                      />
+                    ))}
+                  </ol>
+                  <p className={styles.typingStatus} aria-live="polite">
+                    {typingNames.length === 1 ? `${typingNames[0]} is typing…`
+                      : typingNames.length > 1 ? `${typingNames.join(', ')} are typing…` : ''}
+                  </p>
+                </section>
+                <form className={styles.composer} onSubmit={sendMessage}>
+                  <label className="srOnly" htmlFor="message-draft">Message {roomTitle(activeRoom, snapshot.self.userId)}</label>
+                  <textarea
+                    id="message-draft"
+                    value={draft}
+                    onChange={(event) => setDraft(event.target.value)}
+                    onKeyDown={handleMessageKeyDown}
+                    placeholder="Write a message…"
+                    rows={2}
+                    disabled={busy || loadingRoomId === activeRoom.roomId}
+                  />
+                  <button type="submit" disabled={busy || loadingRoomId === activeRoom.roomId || !draft.trim()}>Send</button>
+                </form>
+              </>
+            )}
+          </>
+        )}
       </main>
 
-      {showCreateGroup && <div className={styles.modalBackdrop} role="presentation"><form className={styles.modal} onSubmit={(event) => void createGroup(event)} aria-labelledby="create-group-title"><h2 id="create-group-title">Create group</h2><p>You will be the only member initially. Others choose to join themselves.</p><label htmlFor="group-name">Group name</label><input id="group-name" value={groupName} onChange={(event) => setGroupName(event.target.value)} maxLength={64} autoFocus /><div className={styles.modalActions}><button type="button" onClick={() => setShowCreateGroup(false)}>Cancel</button><button type="submit" disabled={busy || !groupName.trim()}>Create group</button></div></form></div>}
-      {showDeleteAccount && <div className={styles.modalBackdrop} role="presentation"><form className={styles.modal} onSubmit={(event) => void removeAccount(event)} aria-labelledby="delete-account-title"><h2 id="delete-account-title">Delete account?</h2><p>This cannot be undone. Your old messages will remain, but their sender will display as Unknown.</p><label htmlFor="delete-password">Confirm password</label><input id="delete-password" type="password" value={deletePassword} onChange={(event) => setDeletePassword(event.target.value)} autoComplete="current-password" autoFocus />{deleteError && <p className={styles.deleteError} role="alert">{deleteError}</p>}<div className={styles.modalActions}><button type="button" onClick={() => setShowDeleteAccount(false)} disabled={busy}>Cancel</button><button type="submit" className={styles.dangerButton} disabled={busy || !deletePassword}>Delete permanently</button></div></form></div>}
+      {showCreateGroup && (
+        <CreateGroupDialog
+          name={groupName}
+          busy={busy}
+          onNameChange={setGroupName}
+          onSubmit={createGroup}
+          onCancel={() => setShowCreateGroup(false)}
+        />
+      )}
+      {showDeleteAccount && (
+        <DeleteAccountDialog
+          password={deletePassword}
+          error={deleteError}
+          busy={busy}
+          onPasswordChange={setDeletePassword}
+          onSubmit={removeAccount}
+          onCancel={() => setShowDeleteAccount(false)}
+        />
+      )}
     </section>
   );
 }

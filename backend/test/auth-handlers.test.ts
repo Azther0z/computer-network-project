@@ -160,6 +160,43 @@ test('snapshots show public offline members but exclude unrelated private rooms'
   assert.equal(JSON.stringify(login).includes('passwordHash'), false);
 });
 
+test('room acknowledgements and account snapshots agree on offline and deleted member data', async t => {
+  const { client, storage } = await setup(t);
+  const alice = await client();
+  const registered = await command(alice, 'auth.register', credentials);
+  const aliceId = registered.data.snapshot.self.userId;
+  const bob = storage.createUser({ name: 'Bob', canonicalName: 'bob', passwordHash: 'synthetic-hash' });
+  const group = storage.createGroup(bob.userId, 'Shared group');
+  storage.findOrCreatePrivateRoom(aliceId, bob.userId);
+
+  const joined = await command(alice, 'group.join', { roomId: group.roomId });
+  const opened = await command(alice, 'private.open', { peerId: bob.userId });
+  const expectedMembers = [
+    { userId: aliceId, name: 'Alice', online: true },
+    { userId: bob.userId, name: 'Bob', online: false },
+  ];
+  const byId = (left: { userId: string }, right: { userId: string }) => left.userId.localeCompare(right.userId);
+  assert.deepEqual([...joined.data.group.members].sort(byId), [...expectedMembers].sort(byId));
+  assert.deepEqual([...opened.data.room.members].sort(byId), [...expectedMembers].sort(byId));
+
+  await command(alice, 'auth.logout');
+  const login = await command(alice, 'auth.login', credentials);
+  assert.deepEqual(login.data.snapshot.groups, [joined.data.group]);
+  assert.deepEqual(login.data.snapshot.privateRooms, [opened.data.room]);
+  assert.deepEqual(Object.keys(opened.data.room).sort(), ['kind', 'members', 'roomId']);
+
+  storage.deleteAccount(bob.userId);
+  const reopened = await command(alice, 'private.open', { peerId: bob.userId });
+  const rejoined = await command(alice, 'group.join', { roomId: group.roomId });
+  const deletedPeer = reopened.data.room.members.find((member: { userId: string }) => member.userId === bob.userId);
+  assert.deepEqual(deletedPeer, { userId: bob.userId, name: '<Unknown>', online: false });
+  assert.deepEqual(rejoined.data.group.members, [expectedMembers[0]]);
+  await command(alice, 'auth.logout');
+  const afterDeletion = await command(alice, 'auth.login', credentials);
+  assert.deepEqual(afterDeletion.data.snapshot.groups, [rejoined.data.group]);
+  assert.deepEqual(afterDeletion.data.snapshot.privateRooms, [reopened.data.room]);
+});
+
 test('invalid payloads and Unicode controls are rejected; names count code points', async t => {
   const { client } = await setup(t);
   const socket = await client();

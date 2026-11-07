@@ -3,10 +3,10 @@ import { argon2id, hash, verify } from 'argon2';
 import type { Server, Socket } from 'socket.io';
 
 import { Storage } from '../../database/storage.js';
+import { toPublicRoom, type PublicRoom, type PublicUser } from '../../lib/public-room.js';
 import type { AuthenticatedActor, RoomRecord } from '../../lib/types.js';
 
-export type PublicUser = AuthenticatedActor & { online: boolean };
-type PublicRoom = { roomId: string; kind: 'private' | 'group'; name?: string; members: PublicUser[] };
+export type { PublicUser } from '../../lib/public-room.js';
 export type AccountSnapshot = {
   self: PublicUser;
   users: PublicUser[];
@@ -74,12 +74,8 @@ export class AuthPresence {
     );
   }
 
-  private room = (room: RoomRecord): PublicRoom => ({
-    roomId: room.roomId, kind: room.kind,
-    ...(room.name === null ? {} : { name: room.name }),
-    members: (room.kind === 'private' ? this.storage.getPrivateRoomMembers(room.roomId) : this.storage.getRoomMembers(room.roomId))
-      .map(this.toPublicUser),
-  });
+  private room = (room: RoomRecord): PublicRoom =>
+    toPublicRoom(this.storage, room, this.toPublicUser);
 
   private groups(): PublicRoom[] { return this.storage.listGroups().map(this.room); }
 
