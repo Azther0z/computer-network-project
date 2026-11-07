@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  icons: {
+    icon: "./talkmato-logo.svg",
+  },
   title: "Talkmato",
   description: "Small talks, fresh connections.",
 };

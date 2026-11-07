@@ -189,6 +189,12 @@
   color: #292725;
 }
 
+.emptyStateIcon {
+  width: 128px;
+  height: 128px;
+  justify-self: center;
+}
+
 .emptyState p,
 .groupPreview p,
 .modal p {
@@ -345,38 +351,73 @@
   font-style: italic;
 }
 
+.typingStatus:not(:empty) {
+  animation: typingPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes typingPulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .typingStatus:not(:empty) {
+    animation: none;
+  }
+}
+
 .receivedMessage,
 .ownMessage {
   position: relative;
+  display: grid;
+  gap: 5px;
   max-width: min(75%, 520px);
-  padding: 12px 14px;
-  border-radius: 16px;
   color: #292725;
-  background: #f5f1ec;
 }
 
 .ownMessage {
   justify-self: end;
+}
+
+.messageSender {
+  display: block;
+  color: #e7473f;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.ownMessage .messageSender {
+  text-align: right;
+}
+
+.messageBubble {
+  display: grid;
+  gap: 6px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: #f5f1ec;
+}
+
+.ownMessage .messageBubble {
   color: #ffffff;
   background: #e7473f;
 }
 
-.receivedMessage strong {
-  display: block;
-  margin-bottom: 5px;
-  font-size: 0.82rem;
-}
-
-.receivedMessage p,
-.ownMessage p {
+.messageBubble p {
   line-height: 1.45;
   white-space: pre-wrap;
 }
 
-.receivedMessage time,
-.ownMessage time {
-  display: block;
-  margin-top: 6px;
+.messageBubble time {
+  justify-self: end;
   color: inherit;
   font-size: 0.72rem;
   opacity: 0.7;
