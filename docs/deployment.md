@@ -1,125 +1,138 @@
-# Single-VM deployment with Docker Compose
+# Cloud Build delivery to Compute Engine
 
-GitHub Actions tests Talkmato, builds frontend/backend images, and publishes the images after application checks to GitHub Container Registry (GHCR). After production approval, it connects to the existing GCP VM through IAP and runs Docker Compose with the exact image digests. Infrastructure setup is a one-time owner task; Actions does not provision or change cloud resources.
+GitHub Actions runs PR checks. A Google Cloud Build trigger for `main` runs the release tests, builds both Docker images, pushes them to a private Artifact Registry repository, and updates Docker Compose on the existing Compute Engine VM through IAP/OS Login. Caddy provides HTTPS/WSS. The backend reads its AI token directly from Secret Manager at startup using the VM identity.
 
-This is deployment preparation, not evidence of a running public service. The user reports that the GCP project, network, subnet, and firewall rules exist. VM creation, identity setup, DNS, package visibility, and public acceptance checks still need verification. Do not enable delivery until the setup below is complete.
+This repository contains deployment configuration, not a verified live deployment. The user reports that the GCP project, network, subnet, and firewall rules exist. Cloud setup, the GitHub connection/trigger, IAM, private registry pulls, Secret Manager access, DNS, and the public demonstration remain unverified. Account, cloud, privileged host, and secret-entry changes require separate owner authorization. No infrastructure is created by `cloudbuild.yaml`.
 
-## Runtime
+## Runtime and configuration
 
 ```mermaid
 flowchart LR
+    GitHub[Merge to main] --> Trigger[Cloud Build trigger and approval]
+    Trigger --> Build[Tests and Docker builds]
+    Build --> Registry[Private Artifact Registry]
+    Registry --> VM[Compose on one GCE VM]
     Browser -->|HTTPS / WSS| Caddy
-    Caddy -->|UI| Frontend[Next.js :3000]
-    Caddy -->|Socket.IO, session, health| Backend[One Node.js backend :8080]
-    Backend --> SQLite[(Persistent SQLite volume)]
+    Caddy --> Frontend[Next.js]
+    Caddy --> Backend[One Socket.IO backend]
+    Backend --> SQLite[(SQLite volume)]
+    Backend -->|VM service account| Secrets[Secret Manager]
 ```
 
-Only Caddy publishes host ports, 80 and 443. Containers find one another through Compose service names. Both app containers listen inside the Docker network; neither publishes a host port. Browsers still use socket.io-client against the single backend, and Next.js never relays chat.
+Only Caddy publishes ports 80/443. The backend and frontend use the Docker network, and Next.js does not relay chat. App images use Node 24.19.0, run as the unprivileged `node` user, and are built in Cloud Build rather than on the small VM. The backend compilation retains non-TypeScript runtime assets, including the SQL schema and any external catalog data.
 
-The two Dockerfiles use Node 24.19.0. The backend image compiles TypeScript and includes its SQL schema, emoji catalog, and production dependencies, including native Argon2. The frontend image uses Next.js standalone output. Both app processes run as the image's unprivileged `node` user. Images are built in CI, not on the small VM.
+The Compose project name stays `talkmato`. Volumes `talkmato_chat_data`, `talkmato_caddy_data`, and `talkmato_caddy_config` survive container replacement. SQLite remains at `/var/lib/talkmato/talkmato.sqlite` inside its volume. Volume storage is not a backup and does not survive loss of the backing VM disk.
 
-`compose.yaml` fixes the project name to `talkmato`. Its volumes are `talkmato_chat_data`, `talkmato_caddy_data`, and `talkmato_caddy_config`. SQLite stays under `/var/lib/talkmato` inside the backend volume; certificate data survives Caddy replacement. Container replacement preserves these volumes. Volume storage is not a backup and does not protect against VM disk loss.
+Each release has a non-secret `.env` containing image digests, the Cloudflare account ID, and a pinned Secret Manager resource name. Compose passes those references to the backend. It does not use `/etc/talkmato/backend.env` or carry an AI token. Do not print resolved environment configuration; use `docker compose config --quiet` for validation.
 
-Real configuration lives only at `/etc/talkmato/backend.env` on the VM, readable by root. Compose injects it into the backend at runtime. AI configuration is optional for core chat. Never put real environment files in images, Git, workflow inputs, or URLs. Use `docker compose config --quiet` for validation; ordinary `config` output can disclose resolved environment values.
+When a secret version is configured, the backend obtains a short-lived Google token from the GCE metadata server, accesses that exact Secret Manager version over HTTPS, and retains the decoded AI token in memory. Calls share a five-second timeout and reject redirects. No credential file, downloaded service-account key, build-time AI token, or Google SDK dependency is needed. Retrieval failure disables AI and emits only a generic startup warning; core chat remains available. No configured secret means local startup makes no Google requests and retains the existing private environment-token development flow.
 
 ## One-time owner setup
 
-Account, cloud, DNS, and privileged host changes require explicit owner approval. The workflow stays disabled while `GCP_CICD_READY` is unset or false. This repository change performs none of those external actions.
+Merge feature PR #6 first, then retarget delivery PR #7 to `main` before merging it. Create the Cloud Build trigger disabled and enable it only after the remaining setup is verified. Keep any old GitHub Delivery workflow disabled during migration. Existing cloud resources and old credentials are not deleted by this change.
 
-### VM and network
+### Project and services
 
-Use project `talkmato`, region `asia-southeast1`, and zone `asia-southeast1-b`. Inspect existing resources before creating anything. The previous proposal selected:
+Use project `talkmato` and region `asia-southeast1`. Enable Cloud Build, Artifact Registry, Secret Manager, Compute Engine, IAP, OS Login, IAM, Cloud Logging, and Cloud Resource Manager APIs as needed. Use the console's guided Cloud Build GitHub connection setup; its managed service agent may require access to its own GitHub connection secrets. Those connection credentials are separate from the app's AI secret.
 
-- Custom network `talkmato-net` and subnet `talkmato-sg` (`10.42.0.0/24`).
-- VM `talkmato`: Ubuntu 24.04 AMD64, `e2-small`, 50 GiB balanced disk, and a reserved external IPv4.
-- VM tag `talkmato`; inbound TCP 80/443 for the website, and TCP 22 from IAP's `35.235.240.0/20` range only.
-- OS Login enabled, project-wide SSH keys blocked, VM deletion protection enabled, boot disk retained on VM deletion, and no attached Google service account.
+Create a private Docker Artifact Registry repository named `talkmato` in `asia-southeast1`. Release images are:
 
-Confirm these settings in GCP. Keep ports 3000 and 8080 closed. Inspect existing A/AAAA records, then configure a DNS-only A record for `talkmato.azther0z.online` pointing directly to the reserved IPv4. Remove or correct conflicting records only after review. DNS and reachable ports 80/443 are prerequisites for Caddy's automatic HTTPS.
+```text
+asia-southeast1-docker.pkg.dev/talkmato/talkmato/backend
+asia-southeast1-docker.pkg.dev/talkmato/talkmato/frontend
+```
 
-Install Docker Engine and the Compose plugin using the official Ubuntu instructions. Enable Docker at boot. On the approved host, prepare the private configuration from the reviewed repository revision:
+Keep image digests used by the active and previous releases when setting retention policies. No GHCR publication, public image visibility, GitHub registry token, or GitHub-to-GCP federation provider is used by the new delivery flow.
+
+### Identities and permissions
+
+Create two dedicated service accounts. Use resource-level bindings where supported; avoid Editor or Owner grants.
+
+| Identity | Required access |
+| --- | --- |
+| `talkmato-build` | Artifact Registry Writer on the app repository; Logs Writer on the project; Compute Viewer; OS Admin Login on the app VM; IAP Tunnel Resource Accessor for that VM restricted to destination port 22; Service Account User on `talkmato-runtime` for SSH into a VM with that attached account |
+| `talkmato-runtime` | Artifact Registry Reader on the app repository; Secret Manager Secret Accessor on the specific AI secret |
+
+Select `talkmato-build@talkmato.iam.gserviceaccount.com` explicitly on the trigger. Trigger settings override the build config's `serviceAccount` field. The person configuring the trigger needs permission to act as this account; the person approving builds needs Cloud Build Approver. The build's custom service account writes logs to Cloud Logging through `CLOUD_LOGGING_ONLY`.
+
+Cloud Build does not request the AI secret payload. Deployment can run sudo on the VM and act as its runtime identity, so deployment code and trigger editors are privileged. The VM identity is shared by workloads on that VM; this design does not provide per-container IAM isolation.
+
+### VM, network, and DNS
+
+Create or verify VM `talkmato` in `asia-southeast1-b`: Ubuntu 24.04 AMD64, `e2-small`, 50 GiB balanced disk, a reserved public IPv4, and tag `talkmato`. Use the existing reviewed custom network/subnet (`talkmato-net`, `talkmato-sg`, `10.42.0.0/24`). Enable OS Login, block project-wide SSH keys, enable deletion protection, and retain the boot disk on VM deletion.
+
+Attach `talkmato-runtime` to the VM with the `cloud-platform` OAuth access scope. IAM limits its actual permissions. For an existing VM, changing its attached account/scopes may require a stop/start and owner approval. Both Secret Manager and private registry authentication depend on this identity.
+
+Allow inbound TCP 80/443 publicly, and TCP 22 only from IAP's `35.235.240.0/20`. Keep 3000/8080 closed. Point a DNS-only A record for `talkmato.azther0z.online` to the reserved IPv4 after inspecting existing A/AAAA records. Caddy requires reachable ports 80/443 and correct DNS for automatic public HTTPS.
+
+Install Docker Engine, the Compose plugin, Python 3, and the Google Cloud CLI using their official Ubuntu instructions. On the approved VM, enable Docker and configure the registry helper **for root**, since deployment uses sudo:
 
 ```bash
 sudo systemctl enable --now docker
-sudo install -d -m 0755 /srv/talkmato/releases /etc/talkmato
+sudo gcloud auth configure-docker asia-southeast1-docker.pkg.dev --quiet
+sudo install -d -m 0755 /srv/talkmato/releases
 sudo install -d -m 0700 /var/backups/talkmato
-sudo install -m 0600 deploy/backend.env.example /etc/talkmato/backend.env
-sudoedit /etc/talkmato/backend.env
 sudo docker compose version
 ```
 
-Do not overwrite an existing environment file. Enter any optional Cloudflare account/token privately with the editor. The workflow never uploads, prints, or replaces this file. For an existing deployment, review its database and stop conflicting host services before adopting this layout. The workflow refuses an existing host database or Compose database volume without managed release metadata.
+The Docker helper obtains short-lived credentials from the attached VM identity; do not run an interactive user login on the VM or install a JSON key. No manual AI-token file or editor step is required. Review migration of any old host SQLite database before starting: activation refuses unmanaged data instead of silently creating a new history store.
 
-### GitHub-to-Google authentication
+### AI secret
 
-Follow Google's deployment-pipeline federation guide to create a Workload Identity Pool/provider and one service account, `talkmato-deploy`. Enable the Compute, IAP, OS Login, IAM, IAM Credentials, STS, and Cloud Resource Manager APIs as needed. No Terraform state bucket or plan/apply identities are required.
+Create a Secret Manager secret, for example `talkmato-cloudflare-token`. Enter the actual Cloudflare Workers AI token privately through the Google Cloud console. Give only the runtime identity secret-access permission on that secret. Do not paste the token into chat, source, trigger substitutions, Cloud Build environment variables, Docker build arguments, or logs.
 
-Use GitHub's issuer `https://token.actions.githubusercontent.com`. Map `google.subject` to `assertion.sub`. Restrict the provider with all of these claims, using the repository and owner's immutable numeric IDs from GitHub:
+Record a numeric version resource such as `projects/talkmato/secrets/talkmato-cloudflare-token/versions/1`. The backend intentionally rejects `latest`, aliases, and arbitrary URLs. The Cloudflare account ID is ordinary server configuration, not the API token.
 
-| Claim | Required value |
+To rotate: add a secret version, update the trigger's non-secret version reference, and run a reviewed release. A changed reference recreates the backend, which fetches the new value at startup. Pinning allows code/config rollback while the old secret version remains enabled. Container restart fetches the same selected version; the app does not poll for secret changes. Keep both AI substitutions empty to deploy core chat without AI.
+
+### GitHub connection and trigger
+
+In Cloud Build, connect `Azther0z/computer-network-project` using the GitHub app and create a regional trigger with these settings:
+
+| Setting | Value |
 | --- | --- |
-| `assertion.repository_id` | This repository's numeric ID |
-| `assertion.repository_owner_id` | This owner's numeric ID |
-| `assertion.ref` | `refs/heads/main` |
-| `assertion.workflow_ref` | `Azther0z/computer-network-project/.github/workflows/deploy.yml@refs/heads/main` |
+| Name / region | `talkmato-release` / `asia-southeast1` |
+| Event / branch regex | Push to branch / `^main$` |
+| Build config | Repository file `cloudbuild.yaml` |
+| Service account | `talkmato-build@talkmato.iam.gserviceaccount.com` |
+| Require approval | Enabled |
+| Initial state | Disabled until setup is verified |
 
-Allow `roles/iam.workloadIdentityUser` on `talkmato-deploy` only for the pool's exact subject `repo:Azther0z/computer-network-project:environment:production`.
+The committed defaults select the app VM, zone, registry region, and repository. Set these two optional, non-secret trigger substitutions together:
 
-The service account needs Compute viewer access, `roles/compute.osAdminLogin`, and `roles/iap.tunnelResourceAccessor` restricted to the app VM and destination port 22. Scope permissions to the app VM where supported. OS Admin Login permits sudo on this dedicated VM; production review protects that privilege. It needs no project IAM administration, network administration, or storage-bucket access. Do not create a service-account JSON key or permanent CI SSH key.
-
-### GitHub configuration and first publication
-
-Configure these non-secret repository variables:
-
-| Variable | Value |
+| Substitution | Value |
 | --- | --- |
-| `GCP_WIF_PROVIDER` | Full Workload Identity Provider resource name |
-| `GCP_DEPLOY_SERVICE_ACCOUNT` | `talkmato-deploy` service-account email |
-| `GCP_CICD_READY` | Keep `false` until setup is verified |
+| `_CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID, or empty for core chat only |
+| `_CLOUDFLARE_TOKEN_SECRET_VERSION` | Full numeric Secret Manager version resource, or empty |
 
-Create a `production` environment restricted to `main`, with required owner review. A solo owner may allow self-review. Protect `main` with the `Test, build, and validate` check and pull requests. PR jobs receive no Google authentication, and publishing runs only on `main`; the workflows do not use `pull_request_target`.
+Cloud Build approval gates the **whole release build before tests execute**. GitHub PR checks still run before merge. There is no second approval pause between the release build and VM activation. Leave `main` protected with PRs and the existing `Test, build, and validate` GitHub check. Do not attach the privileged release trigger to PRs or fork branches. Trigger creation/approval is console-managed; no extra trigger-management script is committed.
 
-After the reviewed PR reaches `main`, Delivery runs checks and publishes these two packages even while cloud delivery is disabled:
+The old GitHub `production` environment, `GCP_WIF_PROVIDER`, `GCP_DEPLOY_SERVICE_ACCOUNT`, and `GCP_CICD_READY` variables are no longer consumed. Any cleanup of already-created IAM/federation or GHCR resources requires separate review.
 
-- `ghcr.io/azther0z/computer-network-project-backend`
-- `ghcr.io/azther0z/computer-network-project-frontend`
+## Delivery and recovery
 
-GHCR packages are initially private. Explicitly make both packages public before enabling VM deployment; public source code and runtime assets are their only contents. The workflow uses its built-in GitHub token to publish, and the VM pulls anonymously. Do not place registry credentials on the VM. Inspect the package contents and visibility first.
+1. GitHub CI runs backend type checks/tests and frontend tests/lint/build for PRs. It has no Google or registry write permissions.
+2. A merge into `main` creates a pending Cloud Build run. Approve it in Cloud Build after setup. It repeats app checks, builds images with unique commit/build-ID tags, and pushes them before deployment.
+3. The deploy step resolves registry digests and transfers only Compose, Caddy, image references, AI resource references, and a schema hash through IAP. OS Login SSH keys expire after 15 minutes. The first connection records the host key; subsequent connections require it.
+4. Activation waits up to ten minutes for the host lock, then checks the current public GitHub `main` SHA. An outdated build is refused even if it waited behind a newer deployment. This uses the repository's public GitHub API without credentials; network/rate-limit failure stops deployment. It does not serialize all Cloud Build jobs globally.
+5. Configuration lives at `/srv/talkmato/releases/COMMIT-BUILD_ID`, with stable Compose project/volume names. A changed SQL schema stops activation pending a reviewed migration. Before replacing an existing app, SQLite's online backup API creates a consistent, private host backup under `/var/backups/talkmato`.
+6. Compose pulls the private images and waits for the app health checks. Failed activation restores the previous release's Compose configuration/images; a failed initial deployment stops the containers. Database volumes are retained and never restored automatically. The `current` symlink changes only after local health succeeds. Public HTTPS/WSS checks remain manual.
 
-Set `GCP_CICD_READY=true` only after the VM, private configuration, DNS, permissions, environment protection, and public packages are ready. Run Actions → Delivery → Run workflow on `main`. Allow for IAM propagation. Later merges follow the same flow. Merge feature PR #6 first, then retarget delivery PR #7 to `main` before merging it.
+For a normal code rollback, revert via a PR and let a new `main` build deploy it. For urgent operator recovery, inspect a known healthy release, change into its directory, run `sudo docker compose up -d --wait --wait-timeout 120`, then point `/srv/talkmato/current` to it after health passes. Image rollback does not reverse database writes, and the referenced secret version must still be enabled.
 
-## Routine delivery
+After failed first activation, a data volume can exist while `current` is absent. Inspect the failed release and its database, recover using its compatible Compose config, and set `current` only after health passes. Do not remove volumes to bypass the unmanaged-data guard. Backups are local to the VM; arrange an approved off-host destination and restore rehearsal. Old releases/images/backups are not automatically pruned.
 
-1. CI runs the backend tests/type checks and frontend tests/lint, builds both production images, and validates Caddy configuration. It does not run the removed workflow/Compose validation or packaged HTTP/WebSocket checks.
-2. Only a successful `main` run publishes those images. Unique tags identify the revision/run/attempt; deployment uses the registry digests, not mutable tags.
-3. The production job requires approval and rejects an obsolete `main` revision. Its branch guard also covers manual runs, which can select another branch. Short-lived federation supplies a one-hour access token without Google credential files. The upload step uses gcloud's default first-connection host-key trust through IAP; later SCP/SSH connections require that recorded key. OS Login keys expire after 15 minutes.
-4. The upload step transfers Compose, Caddy, image digests, and a schema hash. A separate activation step installs them at `/srv/talkmato/releases/COMMIT-RUN-ATTEMPT`, with no database or private configuration. Fixed project/volume names preserve data across release directories.
-5. Before changing running services, activation refuses a changed SQL schema and makes a consistent SQLite online backup at `/var/backups/talkmato/before-RELEASE.sqlite`. A host lock and GitHub concurrency serialize deployments.
-6. Compose pulls images and waits for the frontend/backend health checks. A failed activation restores the previous release's Compose configuration and images; a failed initial activation stops the containers. Database volumes are retained and never automatically restored. `/srv/talkmato/current` changes only after successful local health checks.
-7. Public HTTPS and WebSocket verification is manual; the workflow has no public HTTPS probe.
+Restart policies recover exited containers when Docker starts; an unhealthy but running process is not restarted solely because of health status. Updates interrupt sockets briefly, and the app performs bounded reconnect. For acceptance, use two physical computers to check public WSS, login/cookie restoration, history after container restart, private/group visibility, AI with the runtime secret, and externally blocked ports 3000/8080. Neither PR checks nor container health establish those results.
 
-Restart policies recover exited containers and start them when Docker restarts. An unhealthy but still-running process is reported by health checks; it is not automatically restarted merely because it is unhealthy. Updates briefly interrupt sockets, which use the app's bounded reconnect behavior. This is not a zero-downtime deployment.
-
-All deployment commands and verification live in the two workflows. There is no `deploy.sh`, `smoke.mjs`, `.service` file, or custom app archive format.
-
-## Recovery and acceptance
-
-For code rollback, revert through a reviewed PR and deploy the resulting images. For urgent operator recovery, inspect a known healthy release under `/srv/talkmato/releases`, change into that directory, and run `sudo docker compose up -d --wait --wait-timeout 120`. After it passes, update `/srv/talkmato/current` to that release. Never print `.env` contents or resolved Compose configuration. Schema changes require a reviewed migration; rolling images back does not undo database writes.
-
-Backups are private and local to the VM. Arrange an approved off-host backup destination and rehearse restoration before relying on durability. Restore only with the backend stopped and a compatible schema. Do not remove data volumes during routine deployment. Old releases, images, volumes, and backups are not automatically pruned; review retention and disk use before cleanup.
-
-After a failed first activation, data volumes may exist while `current` is absent. Inspect the failed release and its database, recover with its compatible Compose configuration, then set `current` after health checks pass. Do not delete the volume to bypass the unmanaged-data guard.
-
-Before claiming public deployment complete, use two physical computers to verify sign-in, public WSS, HTTP-only session restoration, private/group authorization, persistence after container restart, and optional live AI configuration. Check externally that ports 3000/8080 are unreachable. Application tests and Compose health checks do not prove these public browser and firewall requirements.
-
-VM, disk, reserved IPv4, traffic, and any AI usage remain billable. No automatic teardown is scheduled. The previously discussed availability window is November 6–13, 2026 in Bangkok; exact teardown time, data export, and retained resources need later review. Removing Terraform files does not delete any cloud resources or state that may already exist.
+Cloud Build execution, Artifact Registry storage/transfer, Secret Manager operations, VM/disk/IP, network traffic, and AI can incur charges. No automatic teardown is scheduled. The previously discussed November 6–13, 2026 Bangkok availability window still needs an exact teardown and data-export decision.
 
 ## References
 
+- [Cloud Build GitHub triggers](https://docs.cloud.google.com/build/docs/automating-builds/github/build-repos-from-github)
+- [Cloud Build approval](https://docs.cloud.google.com/build/docs/securing-builds/gate-builds-on-approval)
+- [Cloud Build user-managed service accounts](https://docs.cloud.google.com/build/docs/securing-builds/configure-user-specified-service-accounts)
+- [Cloud Build script environment mapping](https://docs.cloud.google.com/build/docs/configuring-builds/run-bash-scripts)
 - [Docker Engine on Ubuntu](https://docs.docker.com/engine/install/ubuntu/)
-- [Compose on a production server](https://docs.docker.com/compose/how-tos/production/)
-- [Persistent Docker volumes](https://docs.docker.com/engine/storage/volumes/)
-- [Caddy automatic HTTPS](https://caddyserver.com/docs/automatic-https)
-- [Google deployment-pipeline federation](https://docs.cloud.google.com/iam/docs/workload-identity-federation-with-deployment-pipelines)
-- [Google IAP SSH access](https://docs.cloud.google.com/compute/docs/connect/ssh-using-iap)
-- [GHCR authentication and package visibility](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)
+- [Artifact Registry authentication](https://docs.cloud.google.com/artifact-registry/docs/docker/authentication)
+- [Secret Manager access](https://docs.cloud.google.com/secret-manager/docs/access-secret-version)
+- [Secret Manager best practices](https://docs.cloud.google.com/secret-manager/docs/best-practices)

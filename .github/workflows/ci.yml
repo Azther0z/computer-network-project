@@ -2,38 +2,22 @@ name: Checks
 
 on:
   pull_request:
-  push:
-    branches-ignore: [main]
-  workflow_call:
-    outputs:
-      backend_image:
-        value: ${{ jobs.checks.outputs.backend_image }}
-      frontend_image:
-        value: ${{ jobs.checks.outputs.frontend_image }}
 
 permissions:
   contents: read
 
 concurrency:
-  group: checks-${{ github.workflow }}-${{ github.ref }}
+  group: checks-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   checks:
     name: Test, build, and validate
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    permissions:
-      contents: read
-      packages: write
-    outputs:
-      backend_image: ${{ steps.publish.outputs.backend_image }}
-      frontend_image: ${{ steps.publish.outputs.frontend_image }}
+    timeout-minutes: 20
     env:
       NEXT_TELEMETRY_DISABLED: '1'
       NEXT_PUBLIC_BACKEND_URL: https://talkmato.azther0z.online
-      BACKEND_IMAGE: talkmato-backend:check
-      FRONTEND_IMAGE: talkmato-frontend:check
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -55,29 +39,4 @@ jobs:
           npm --prefix frontend ci
           npm --prefix frontend test
           npm --prefix frontend run lint
-      - name: Build production images
-        run: |
-          docker build --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
-            --label "org.opencontainers.image.revision=$GITHUB_SHA" --tag "$BACKEND_IMAGE" --file backend/Dockerfile .
-          docker build --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
-            --label "org.opencontainers.image.revision=$GITHUB_SHA" --tag "$FRONTEND_IMAGE" --file frontend/Dockerfile .
-          docker run --rm -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" \
-            caddy:2.11.9-alpine@sha256:0bbb055bda6793c999bde78b1b5ce3e89f829fb031af2cf50056ea1246559fee caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
-      - name: Publish images
-        id: publish
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          registry="ghcr.io/${GITHUB_REPOSITORY,,}"
-          tag="$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
-          trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
-          for service in backend frontend; do
-            image="$registry-$service:$tag"
-            docker tag "talkmato-$service:check" "$image"
-            docker push "$image"
-            digest=$(docker image inspect --format '{{index .RepoDigests 0}}' "$image")
-            [[ $digest == "$registry-$service@sha256:"* ]]
-            printf '%s_image=%s\n' "$service" "$digest" >> "$GITHUB_OUTPUT"
-          done
+          npm --prefix frontend run build

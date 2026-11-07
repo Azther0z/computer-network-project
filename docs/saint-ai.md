@@ -46,7 +46,7 @@ Paste the Account ID and Workers AI token only at the hidden terminal prompts. D
 
 Create the token through Cloudflare's Workers AI REST setup panel. Review the current account plan and usage before live requests. The application does not upgrade the account or configure billing. Follow the [official REST setup guide](https://developers.cloudflare.com/workers-ai/get-started/rest-api/).
 
-For public deployment, use a private server-side secret mechanism. The interactive helper is for local development. No real AI credentials were stored or configured by the implementation work.
+For public deployment, store the AI token in Google Secret Manager and configure `CLOUDFLARE_TOKEN_SECRET_VERSION` with a numeric version resource. The backend fetches it at startup through the GCE metadata identity and keeps it in memory. Cloud Build and Compose carry only the account ID and resource reference. A failed fetch disables AI while preserving core chat; rotation takes effect on backend restart or redeployment with a new version reference. The interactive helper is for local development. See [deployment](deployment.md) for IAM and setup. No real AI credentials were stored or configured by the implementation work.
 
 ## Verification
 

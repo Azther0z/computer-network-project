@@ -1,0 +1,159 @@
+# A reviewed main-branch trigger runs this file with the talkmato-build service account.
+# script fields use mapped environment variables, not inline substitution of shell code.
+serviceAccount: projects/talkmato/serviceAccounts/talkmato-build@talkmato.iam.gserviceaccount.com
+timeout: 1800s
+options:
+  logging: CLOUD_LOGGING_ONLY
+  automapSubstitutions: true
+substitutions:
+  _REGION: asia-southeast1
+  _REPOSITORY: talkmato
+  _INSTANCE: talkmato
+  _ZONE: asia-southeast1-b
+  _CLOUDFLARE_ACCOUNT_ID: ''
+  _CLOUDFLARE_TOKEN_SECRET_VERSION: ''
+
+steps:
+  - id: verify-backend
+    name: node:24.19.0-bookworm-slim@sha256:a9f5f7c91a432850b2a8a7797adf5eadb6c733ceed61167806cee7ea7fbc29df
+    dir: backend
+    script: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      [[ $PROJECT_ID == talkmato && $BRANCH_NAME == main ]]
+      [[ $COMMIT_SHA =~ ^[0-9a-f]{40}$ && $BUILD_ID =~ ^[0-9a-f-]{36}$ ]]
+      npm ci
+      npm run typecheck
+      npm test
+  - id: verify-frontend
+    name: node:24.19.0-bookworm-slim@sha256:a9f5f7c91a432850b2a8a7797adf5eadb6c733ceed61167806cee7ea7fbc29df
+    dir: frontend
+    script: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      npm ci
+      npm test
+      npm run lint
+  - id: build-backend
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --file=backend/Dockerfile
+      - --tag=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/backend:$COMMIT_SHA-$BUILD_ID
+      - --label=org.opencontainers.image.revision=$COMMIT_SHA
+      - .
+  - id: build-frontend
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --file=frontend/Dockerfile
+      - --tag=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/frontend:$COMMIT_SHA-$BUILD_ID
+      - --label=org.opencontainers.image.revision=$COMMIT_SHA
+      - .
+  - id: publish
+    name: gcr.io/cloud-builders/docker
+    script: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      registry="$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPOSITORY"
+      for service in backend frontend; do
+        docker push "$registry/$service:$COMMIT_SHA-$BUILD_ID"
+      done
+  - id: deploy
+    name: gcr.io/cloud-builders/gcloud
+    script: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      umask 077
+      [[ $_REGION =~ ^[a-z][a-z0-9-]+$ && $_REPOSITORY =~ ^[a-z][a-z0-9-]+$ ]]
+      [[ -z $_CLOUDFLARE_ACCOUNT_ID || $_CLOUDFLARE_ACCOUNT_ID =~ ^[0-9a-fA-F]{32}$ ]]
+      [[ -z $_CLOUDFLARE_TOKEN_SECRET_VERSION || $_CLOUDFLARE_TOKEN_SECRET_VERSION =~ ^projects/[a-zA-Z0-9_-]+/secrets/[a-zA-Z0-9_-]+/versions/[1-9][0-9]*$ ]]
+      [[ -z $_CLOUDFLARE_ACCOUNT_ID && -z $_CLOUDFLARE_TOKEN_SECRET_VERSION || -n $_CLOUDFLARE_ACCOUNT_ID && -n $_CLOUDFLARE_TOKEN_SECRET_VERSION ]]
+      release_id="$COMMIT_SHA-$BUILD_ID"
+      registry="$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPOSITORY"
+      mkdir -p work/delivery
+      for service in backend frontend; do
+        digest=$(gcloud artifacts docker images describe "$registry/$service:$release_id" --format='value(image_summary.digest)')
+        [[ $digest =~ ^sha256:[0-9a-f]{64}$ ]]
+        printf '%s_IMAGE=%s/%s@%s\n' "${service^^}" "$registry" "$service" "$digest"
+      done > work/delivery/images.env
+      printf 'CLOUDFLARE_ACCOUNT_ID=%s\nCLOUDFLARE_TOKEN_SECRET_VERSION=%s\n' \
+        "$_CLOUDFLARE_ACCOUNT_ID" "$_CLOUDFLARE_TOKEN_SECRET_VERSION" >> work/delivery/images.env
+      sha256sum backend/src/schema.sql | cut -d ' ' -f 1 > work/delivery/schema.sha256
+      flags=(--project="$PROJECT_ID" --zone="$_ZONE" --tunnel-through-iap --quiet --ssh-key-expire-after=15m)
+      incoming="talkmato-incoming/$release_id"
+      gcloud compute ssh "$_INSTANCE" "${flags[@]}" --command="install -d -m 0700 $incoming/deploy"
+      flags+=(--strict-host-key-checking=yes)
+      gcloud compute scp compose.yaml work/delivery/images.env work/delivery/schema.sha256 \
+        "$_INSTANCE:$incoming/" "${flags[@]}"
+      gcloud compute scp deploy/Caddyfile "$_INSTANCE:$incoming/deploy/" "${flags[@]}"
+      gcloud compute ssh "$_INSTANCE" "${flags[@]}" --command="sudo bash -s -- $release_id" <<'REMOTE'
+      set -euo pipefail
+      umask 077
+      release_id=$1
+      [[ $release_id =~ ^[0-9a-f]{40}-[0-9a-f-]{36}$ ]]
+      exec 9>/run/lock/talkmato-deploy.lock
+      flock -w 600 9 || { echo 'Another deployment is active; rerun the newest build.' >&2; exit 1; }
+      # Cloud Build runs can overlap. Check main after obtaining the host lock.
+      current=$(python3 - <<'PYMAIN'
+      import json, urllib.request
+      request = urllib.request.Request('https://api.github.com/repos/Azther0z/computer-network-project/git/ref/heads/main', headers={'User-Agent': 'talkmato-deployment'})
+      with urllib.request.urlopen(request, timeout=10) as response:
+          print(json.load(response)['object']['sha'])
+      PYMAIN
+      )
+      [[ $current == "${release_id%%-*}" ]] || { echo 'Main advanced; run its newer build.' >&2; exit 1; }
+      incoming="$PWD/talkmato-incoming/$release_id"
+      release="/srv/talkmato/releases/$release_id"
+      previous=''
+      if [[ -e /srv/talkmato/current || -L /srv/talkmato/current ]]; then
+        test -L /srv/talkmato/current
+        previous=$(readlink -e /srv/talkmato/current)
+        [[ $previous == /srv/talkmato/releases/* && -f $previous/compose.yaml ]]
+      elif [[ -e /var/lib/talkmato/talkmato.sqlite ]] || docker volume inspect talkmato_chat_data >/dev/null 2>&1; then
+        echo 'Existing database has no managed Compose release; review its migration first.' >&2
+        exit 1
+      fi
+      install -d -m 0755 /srv/talkmato/releases
+      install -d -m 0700 /var/backups/talkmato
+      test ! -e "$release"
+      install -d -m 0755 "$release/deploy"
+      install -m 0644 "$incoming/compose.yaml" "$incoming/schema.sha256" "$release/"
+      install -m 0644 "$incoming/deploy/Caddyfile" "$release/deploy/Caddyfile"
+      install -m 0644 "$incoming/images.env" "$release/.env"
+      cd "$release"
+      docker compose config --quiet
+      docker compose pull --quiet
+      docker compose run --rm --no-deps caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+      if [[ -n $previous && -d $previous ]]; then
+        cmp -s "$previous/schema.sha256" "$release/schema.sha256" \
+          || { echo 'Schema changed; review a migration before deploying.' >&2; exit 1; }
+        cd "$previous"
+        docker compose exec -T backend node --input-type=module -e \
+          "import { DatabaseSync, backup } from 'node:sqlite'; const db = new DatabaseSync(process.env.DATABASE_PATH, {readOnly:true}); await backup(db, '/tmp/before-deploy.sqlite'); db.close();"
+        docker cp "$(docker compose ps -q backend):/tmp/before-deploy.sqlite" \
+          "/var/backups/talkmato/before-$release_id.sqlite" >/dev/null
+        chmod 0600 "/var/backups/talkmato/before-$release_id.sqlite"
+        docker compose exec -T backend node -e "require('node:fs').unlinkSync('/tmp/before-deploy.sqlite')"
+      fi
+      rollback() {
+        status=$?
+        if [[ $status -ne 0 ]]; then
+          if [[ -n $previous && -d $previous ]]; then
+            cd "$previous"
+            docker compose up -d --wait --wait-timeout 120 || echo 'Rollback needs operator attention.' >&2
+          else
+            cd "$release"
+            docker compose stop || true
+          fi
+          echo 'Activation failed. Database volumes were retained.' >&2
+        fi
+        exit "$status"
+      }
+      trap rollback EXIT
+      cd "$release"
+      docker compose up -d --wait --wait-timeout 120
+      ln -s "$release" "/srv/talkmato/.next-$release_id"
+      mv -Tf "/srv/talkmato/.next-$release_id" /srv/talkmato/current
+      printf 'Activated release %s.\n' "$release_id"
+      REMOTE

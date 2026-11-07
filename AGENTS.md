@@ -28,6 +28,8 @@ Preserve the user-supplied SVGs in docs/wireframes/ as the current UI/brand refe
 
 ## Compose delivery
 
-Deployment commands and probes live in the Actions workflows; do not add `deploy.sh`, `smoke.mjs`, or app systemd units. Keep the Compose project/volume names stable across release directories. Never print resolved private configuration; validate with `docker compose config --quiet`.
+Release commands live in `cloudbuild.yaml`; GitHub Actions is for PR checks; do not add `deploy.sh`, `smoke.mjs`, or app systemd units. Keep the Compose project/volume names stable across release directories. Never print resolved private configuration; validate with `docker compose config --quiet`.
 
 The compiled backend image must include `schema.sql` and the emoji catalog beside their emitted JavaScript modules. Preserve the schema-change guard and consistent SQLite backup before activation.
+
+Production AI tokens are fetched from Secret Manager into backend memory through the GCE metadata identity. Pass only the account ID and pinned numeric secret-version reference through Compose; never inject the token into builds, images, Compose environment files, or logs. Keep the runtime identity scoped to the app registry and AI secret.
