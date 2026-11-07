@@ -124,17 +124,18 @@ steps:
       cd "$release"
       docker compose config --quiet
       docker compose pull --quiet
-      docker compose run --rm --no-deps caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+      # Container commands must not consume the rest of this streamed Bash script.
+      docker compose run --interactive=false --rm --no-deps caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
       if [[ -n $previous && -d $previous ]]; then
         cmp -s "$previous/schema.sha256" "$release/schema.sha256" \
           || { echo 'Schema changed; review a migration before deploying.' >&2; exit 1; }
         cd "$previous"
-        docker compose exec -T backend node --input-type=module -e \
+        docker compose exec --interactive=false -T backend node --input-type=module -e \
           "import { DatabaseSync, backup } from 'node:sqlite'; const db = new DatabaseSync(process.env.DATABASE_PATH, {readOnly:true}); await backup(db, '/tmp/before-deploy.sqlite'); db.close();"
         docker cp "$(docker compose ps -q backend):/tmp/before-deploy.sqlite" \
           "/var/backups/talkmato/before-$release_id.sqlite" >/dev/null
         chmod 0600 "/var/backups/talkmato/before-$release_id.sqlite"
-        docker compose exec -T backend node -e "require('node:fs').unlinkSync('/tmp/before-deploy.sqlite')"
+        docker compose exec --interactive=false -T backend node -e "require('node:fs').unlinkSync('/tmp/before-deploy.sqlite')"
       fi
       rollback() {
         status=$?
@@ -157,3 +158,5 @@ steps:
       mv -Tf "/srv/talkmato/.next-$release_id" /srv/talkmato/current
       printf 'Activated release %s.\n' "$release_id"
       REMOTE
+      # Independently reject a successful SSH exit that skipped activation.
+      gcloud compute ssh "$_INSTANCE" "${flags[@]}" --command="test /srv/talkmato/releases/$release_id -ef /srv/talkmato/current"
