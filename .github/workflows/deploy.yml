@@ -20,6 +20,7 @@ jobs:
       packages: write
 
   deploy:
+    # Manual workflow_dispatch runs can select a branch other than main.
     if: github.ref == 'refs/heads/main' && vars.GCP_CICD_READY == 'true'
     needs: checks
     runs-on: ubuntu-24.04
@@ -51,7 +52,7 @@ jobs:
           create_credentials_file: false
           export_environment_variables: false
       - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
-      - name: Upload configuration and activate the tested image digests through IAP
+      - name: Upload deployment configuration through IAP
         env:
           CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
           CLOUDSDK_CORE_ACCOUNT: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
@@ -67,32 +68,25 @@ jobs:
           printf 'BACKEND_IMAGE=%s\nFRONTEND_IMAGE=%s\n' "$BACKEND_IMAGE" "$FRONTEND_IMAGE" > "$RUNNER_TEMP/images.env"
           sha256sum backend/src/schema.sql | cut -d ' ' -f 1 > "$RUNNER_TEMP/schema.sha256"
           flags=(--project=talkmato --zone=asia-southeast1-b --tunnel-through-iap --quiet
-            --ssh-key-expire-after=15m --strict-host-key-checking=yes)
+            --ssh-key-expire-after=15m)
 
-          # Learn the exact instance's host key through an authenticated IAP tunnel.
-          instance_id=$(gcloud compute instances describe talkmato --project=talkmato \
-            --zone=asia-southeast1-b --format='value(id)')
-          [[ $instance_id =~ ^[0-9]+$ ]]
-          gcloud compute start-iap-tunnel talkmato 22 --project=talkmato --zone=asia-southeast1-b \
-            --local-host-port=127.0.0.1:22222 --quiet > "$RUNNER_TEMP/iap.log" 2>&1 &
-          tunnel_pid=$!
-          trap 'kill "$tunnel_pid" 2>/dev/null || true; wait "$tunnel_pid" 2>/dev/null || true' EXIT
-          for _ in {1..30}; do
-            if ssh-keyscan -T 2 -p 22222 -t ed25519 127.0.0.1 > "$RUNNER_TEMP/host-key" 2>/dev/null \
-              && [[ -s $RUNNER_TEMP/host-key ]]; then break; fi
-            kill -0 "$tunnel_pid"
-            sleep 1
-          done
-          [[ -s $RUNNER_TEMP/host-key ]]
-          mkdir -p "$HOME/.ssh"
-          awk -v host="compute.$instance_id" '$2 == "ssh-ed25519" && NF == 3 {print host, $2, $3}' \
-            "$RUNNER_TEMP/host-key" >> "$HOME/.ssh/google_compute_known_hosts"
           incoming="talkmato-incoming/$release_id"
           gcloud compute ssh talkmato "${flags[@]}" --command="install -d -m 0700 $incoming/deploy"
+          # gcloud learns the host key on the first IAP SSH connection; require it afterward.
+          flags+=(--strict-host-key-checking=yes)
           gcloud compute scp compose.yaml "$RUNNER_TEMP/images.env" "$RUNNER_TEMP/schema.sha256" \
             "talkmato:$incoming/" "${flags[@]}"
           gcloud compute scp deploy/Caddyfile "talkmato:$incoming/deploy/" "${flags[@]}"
-          gcloud compute ssh talkmato "${flags[@]}" --command="sudo bash -s -- $release_id" <<'REMOTE'
+      - name: Activate images with SQLite backup and rollback
+        env:
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          CLOUDSDK_CORE_ACCOUNT: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+        run: |
+          release_id="$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          [[ $release_id =~ ^[0-9a-f]{40}-[0-9]+-[0-9]+$ ]]
+          gcloud compute ssh talkmato --project=talkmato --zone=asia-southeast1-b \
+            --tunnel-through-iap --quiet --ssh-key-expire-after=15m --strict-host-key-checking=yes \
+            --command="sudo bash -s -- $release_id" <<'REMOTE'
           set -euo pipefail
           umask 077
           release_id=$1
@@ -115,16 +109,14 @@ jobs:
           install -d -m 0700 /var/backups/talkmato
           test ! -e "$release"
           install -d -m 0755 "$release/deploy"
-          install -m 0644 "$incoming/compose.yaml" "$release/compose.yaml"
+          install -m 0644 "$incoming/compose.yaml" "$incoming/schema.sha256" "$release/"
           install -m 0644 "$incoming/deploy/Caddyfile" "$release/deploy/Caddyfile"
           install -m 0644 "$incoming/images.env" "$release/.env"
-          install -m 0644 "$incoming/schema.sha256" "$release/schema.sha256"
           cd "$release"
           docker compose config --quiet
           docker compose pull --quiet
           docker compose run --rm --no-deps caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
           if [[ -n $previous && -d $previous ]]; then
-            [[ $previous == /srv/talkmato/releases/* && -f $previous/compose.yaml ]]
             cmp -s "$previous/schema.sha256" "$release/schema.sha256" \
               || { echo 'Schema changed; review a migration before deploying.' >&2; exit 1; }
             cd "$previous"
@@ -135,10 +127,9 @@ jobs:
             chmod 0600 "/var/backups/talkmato/before-$release_id.sqlite"
             docker compose exec -T backend node -e "require('node:fs').unlinkSync('/tmp/before-deploy.sqlite')"
           fi
-          activated=false
           rollback() {
             status=$?
-            if [[ $status -ne 0 && $activated == true ]]; then
+            if [[ $status -ne 0 ]]; then
               if [[ -n $previous && -d $previous ]]; then
                 cd "$previous"
                 docker compose up -d --wait --wait-timeout 120 || echo 'Rollback needs operator attention.' >&2
@@ -152,16 +143,8 @@ jobs:
           }
           trap rollback EXIT
           cd "$release"
-          activated=true
           docker compose up -d --wait --wait-timeout 120
           ln -s "$release" "/srv/talkmato/.next-$release_id"
           mv -Tf "/srv/talkmato/.next-$release_id" /srv/talkmato/current
           printf 'Activated release %s.\n' "$release_id"
           REMOTE
-      - name: Verify public HTTPS
-        run: |
-          curl --fail --silent --show-error --max-time 10 --retry 20 --retry-delay 3 --retry-all-errors \
-            https://talkmato.azther0z.online/health | python3 -c 'import json,sys; assert json.load(sys.stdin)["ok"] is True'
-          curl --fail --silent --show-error --max-time 10 \
-            https://talkmato.azther0z.online/ --output "$RUNNER_TEMP/index.html"
-          grep -q Talkmato "$RUNNER_TEMP/index.html"

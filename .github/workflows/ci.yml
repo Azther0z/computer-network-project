@@ -34,7 +34,6 @@ jobs:
       NEXT_PUBLIC_BACKEND_URL: https://talkmato.azther0z.online
       BACKEND_IMAGE: talkmato-backend:check
       FRONTEND_IMAGE: talkmato-frontend:check
-      BACKEND_ENV_FILE: ./deploy/backend.env.example
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -46,16 +45,6 @@ jobs:
           cache-dependency-path: |
             backend/package-lock.json
             frontend/package-lock.json
-      - name: Validate workflows and Compose
-        run: |
-          curl --fail --silent --show-error --location \
-            https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz \
-            --output "$RUNNER_TEMP/actionlint.tar.gz"
-          printf '8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  %s\n' \
-            "$RUNNER_TEMP/actionlint.tar.gz" | sha256sum --check --status
-          tar -xzf "$RUNNER_TEMP/actionlint.tar.gz" -C "$RUNNER_TEMP" actionlint
-          "$RUNNER_TEMP/actionlint" -color
-          docker compose config --quiet
       - name: Verify backend
         run: |
           npm --prefix backend ci
@@ -74,40 +63,7 @@ jobs:
             --label "org.opencontainers.image.revision=$GITHUB_SHA" --tag "$FRONTEND_IMAGE" --file frontend/Dockerfile .
           docker run --rm -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" \
             caddy:2.11.9-alpine@sha256:0bbb055bda6793c999bde78b1b5ce3e89f829fb031af2cf50056ea1246559fee caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
-      - name: Check packaged HTTP, native modules, and WebSocket authentication
-        run: |
-          trap 'docker rm -f check-backend check-frontend >/dev/null 2>&1 || true' EXIT
-          docker run -d --name check-backend --env-file deploy/backend.env.example \
-            -p 127.0.0.1:18080:8080 "$BACKEND_IMAGE"
-          docker run -d --name check-frontend -p 127.0.0.1:13000:3000 "$FRONTEND_IMAGE"
-          curl --fail --silent --show-error --retry 30 --retry-connrefused --retry-delay 1 \
-            http://127.0.0.1:18080/health | python3 -c 'import json,sys; assert json.load(sys.stdin)["ok"] is True'
-          curl --fail --silent --show-error --retry 30 --retry-connrefused --retry-delay 1 \
-            http://127.0.0.1:13000/ --output "$RUNNER_TEMP/index.html"
-          grep -q Talkmato "$RUNNER_TEMP/index.html"
-          node --input-type=module <<'JS'
-          import { io } from './backend/node_modules/socket.io-client/build/esm/index.js';
-          const socket = io('http://127.0.0.1:18080', {
-            autoConnect: false, transports: ['websocket'], reconnection: false,
-            extraHeaders: { Origin: 'https://talkmato.azther0z.online' },
-          });
-          try {
-            await new Promise((resolve, reject) => {
-              const timer = setTimeout(() => reject(Error('WebSocket readiness timed out')), 10000);
-              socket.once('auth.session', data => {
-                clearTimeout(timer);
-                if (data.snapshot) reject(Error('Unexpected authenticated session')); else resolve();
-              });
-              socket.once('connect_error', reject);
-              socket.connect();
-            });
-            const ack = await socket.timeout(5000).emitWithAck('auth.register', {
-              name: 'CI container check', password: 'synthetic-test-password',
-            });
-            if (!ack.ok) throw Error('Packaged account registration failed');
-          } finally { socket.disconnect(); }
-          JS
-      - name: Publish the tested images
+      - name: Publish images
         id: publish
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         env:

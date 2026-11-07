@@ -1,6 +1,6 @@
 # Single-VM deployment with Docker Compose
 
-GitHub Actions tests Talkmato, builds frontend/backend images, and publishes the tested images to GitHub Container Registry (GHCR). After production approval, it connects to the existing GCP VM through IAP and runs Docker Compose with the exact image digests. Infrastructure setup is a one-time owner task; Actions does not provision or change cloud resources.
+GitHub Actions tests Talkmato, builds frontend/backend images, and publishes the images after application checks to GitHub Container Registry (GHCR). After production approval, it connects to the existing GCP VM through IAP and runs Docker Compose with the exact image digests. Infrastructure setup is a one-time owner task; Actions does not provision or change cloud resources.
 
 This is deployment preparation, not evidence of a running public service. The user reports that the GCP project, network, subnet, and firewall rules exist. VM creation, identity setup, DNS, package visibility, and public acceptance checks still need verification. Do not enable delivery until the setup below is complete.
 
@@ -90,14 +90,13 @@ Set `GCP_CICD_READY=true` only after the VM, private configuration, DNS, permiss
 
 ## Routine delivery
 
-1. CI runs the backend tests/type checks and frontend tests/lint, builds both production images, and validates Compose and Caddy.
-2. CI starts the built images and checks HTTP, an unauthenticated WebSocket handshake, and synthetic account registration to exercise packaged SQLite and native Argon2. The test containers are disposable and make no AI calls.
-3. Only a successful `main` run publishes those exact images. Unique tags identify the revision/run/attempt; deployment uses the registry digests, not mutable tags.
-4. The production job requires approval and rejects an obsolete `main` revision. Short-lived federation supplies a one-hour access token without Google credential files. IAP supplies the exact instance's SSH host key, which subsequent connections require. OS Login keys expire after 15 minutes.
-5. Configuration is stored at `/srv/talkmato/releases/COMMIT-RUN-ATTEMPT`. It contains Compose, Caddy, image digests, and a schema hash, with no database or private configuration. Fixed project/volume names preserve data across release directories.
-6. Before changing running services, the workflow refuses a changed SQL schema and makes a consistent SQLite online backup at `/var/backups/talkmato/before-RELEASE.sqlite`. A host lock and GitHub concurrency serialize deployments.
-7. Compose pulls images and waits for the frontend/backend health checks. A failed activation restores the previous release's Compose configuration and images; a failed initial activation stops the containers. Database volumes are retained and never automatically restored. `/srv/talkmato/current` changes only after successful local health checks.
-8. The runner checks public HTTPS and frontend content. A failure here marks delivery failed but does not automatically roll back a locally healthy app: inspect DNS, certificate issuance, and network access.
+1. CI runs the backend tests/type checks and frontend tests/lint, builds both production images, and validates Caddy configuration. It does not run the removed workflow/Compose validation or packaged HTTP/WebSocket checks.
+2. Only a successful `main` run publishes those images. Unique tags identify the revision/run/attempt; deployment uses the registry digests, not mutable tags.
+3. The production job requires approval and rejects an obsolete `main` revision. Its branch guard also covers manual runs, which can select another branch. Short-lived federation supplies a one-hour access token without Google credential files. The upload step uses gcloud's default first-connection host-key trust through IAP; later SCP/SSH connections require that recorded key. OS Login keys expire after 15 minutes.
+4. The upload step transfers Compose, Caddy, image digests, and a schema hash. A separate activation step installs them at `/srv/talkmato/releases/COMMIT-RUN-ATTEMPT`, with no database or private configuration. Fixed project/volume names preserve data across release directories.
+5. Before changing running services, activation refuses a changed SQL schema and makes a consistent SQLite online backup at `/var/backups/talkmato/before-RELEASE.sqlite`. A host lock and GitHub concurrency serialize deployments.
+6. Compose pulls images and waits for the frontend/backend health checks. A failed activation restores the previous release's Compose configuration and images; a failed initial activation stops the containers. Database volumes are retained and never automatically restored. `/srv/talkmato/current` changes only after successful local health checks.
+7. Public HTTPS and WebSocket verification is manual; the workflow has no public HTTPS probe.
 
 Restart policies recover exited containers and start them when Docker restarts. An unhealthy but still-running process is reported by health checks; it is not automatically restarted merely because it is unhealthy. Updates briefly interrupt sockets, which use the app's bounded reconnect behavior. This is not a zero-downtime deployment.
 
@@ -111,7 +110,7 @@ Backups are private and local to the VM. Arrange an approved off-host backup des
 
 After a failed first activation, data volumes may exist while `current` is absent. Inspect the failed release and its database, recover with its compatible Compose configuration, then set `current` after health checks pass. Do not delete the volume to bypass the unmanaged-data guard.
 
-Before claiming public deployment complete, use two physical computers to verify sign-in, public WSS, HTTP-only session restoration, private/group authorization, persistence after container restart, and optional live AI configuration. Check externally that ports 3000/8080 are unreachable. CI container tests and public HTTP checks do not prove these browser and firewall requirements.
+Before claiming public deployment complete, use two physical computers to verify sign-in, public WSS, HTTP-only session restoration, private/group authorization, persistence after container restart, and optional live AI configuration. Check externally that ports 3000/8080 are unreachable. Application tests and Compose health checks do not prove these public browser and firewall requirements.
 
 VM, disk, reserved IPv4, traffic, and any AI usage remain billable. No automatic teardown is scheduled. The previously discussed availability window is November 6–13, 2026 in Bangkok; exact teardown time, data export, and retained resources need later review. Removing Terraform files does not delete any cloud resources or state that may already exist.
 
