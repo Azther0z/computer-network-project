@@ -54,7 +54,7 @@ The first AI emoji effect returns only to its requesting client. Do not broadcas
 
 AI requests accept exactly `roomId` and `messageId`, without client-supplied text or identity. Apply the same persisted membership and first-join visibility rules as history. Missing and pre-join messages both return `MESSAGE_NOT_AVAILABLE`. After the provider returns, recheck the socket identity and message visibility before acknowledging success. Logout and disconnect cancel pending provider work.
 
-One account has at most one AI request in flight and a ten-second start cooldown. The single backend permits two concurrent AI requests. These limits are transient process state, not a billing cap. The provider operation has an eight-second total deadline, below the browser's ten-second acknowledgement timeout. No provider request is automatically retried. See [AI setup and evidence](saint-ai.md).
+One account has at most one AI request in flight and a ten-second start cooldown. The single backend permits two concurrent AI requests. These limits are transient process state, not a billing cap. The provider operation has an eight-second total deadline, below the browser's ten-second acknowledgement timeout. No provider request is automatically retried. See the [AI setup](../README.md#ai-emoji-effect).
 
 ## Validation and errors
 

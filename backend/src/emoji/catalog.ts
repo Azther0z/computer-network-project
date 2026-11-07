@@ -1,26 +1,14 @@
-import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { emojiGroups } from './catalog-data.js';
 
 export type EmojiEntry = { id: string; emoji: string; name: string; group: string; subgroup: string; points: number[] };
 export type ChoiceNode = { id: string; description: string; children?: ChoiceNode[]; entry?: EmojiEntry };
 export const UNICODE_VERSION = '17.0';
-const raw = readFileSync(new URL('./data/emoji-test-17.0.txt', import.meta.url), 'utf8');
-if (createHash('sha256').update(raw).digest('hex') !== '1d8a944f88d7952f7ef7c5167fef3c67995bcae24543949710231b03a201acda') {
-  throw new Error('Emoji source checksum mismatch.');
-}
-
-let group = '';
-let subgroup = '';
-export const emojiCatalog: EmojiEntry[] = [];
-for (const line of raw.split('\n')) {
-  if (line.startsWith('# group: ')) group = line.slice(9).trim();
-  if (line.startsWith('# subgroup: ')) subgroup = line.slice(12).trim();
-  const match = line.match(/^([A-F0-9 ]+)\s*; fully-qualified\s*#\s*\S+\s+E[\d.]+\s+(.+)$/);
-  if (!match) continue;
-  const points = match[1].trim().split(/\s+/).map(hex => Number.parseInt(hex, 16));
-  emojiCatalog.push({ id: `e_${points.map(n => n.toString(16)).join('_')}`, emoji: String.fromCodePoint(...points),
-    name: match[2].trim(), group, subgroup, points });
-}
+export const emojiCatalog: EmojiEntry[] = emojiGroups.flatMap(([group, subgroups]) =>
+  subgroups.flatMap(([subgroup, entries]) => entries.split('\n').map(line => {
+    const [emoji, name] = line.split('|');
+    const points = Array.from(emoji, character => character.codePointAt(0)!);
+    return { id: `e_${points.map(n => n.toString(16)).join('_')}`, emoji, name, group, subgroup, points };
+  })));
 if (emojiCatalog.length !== 3944) throw new Error('Unexpected emoji source version.');
 const key = (points: number[]) => points.filter(n => n !== 0xfe0f).join('_');
 const bySequence = new Map(emojiCatalog.map(entry => [key(entry.points), entry]));

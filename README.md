@@ -62,4 +62,6 @@ See the [implementation ownership plan](docs/implementation-ownership.md), [core
 
 Select **AI effect** on a saved message. The server authorizes the selected message, asks Cloudflare Clef for an emoji, and returns it to that browser for a brief local effect. Reduced motion shows a still emoji. Failures offer manual retry without generating a replacement.
 
-See [Saint's setup and evaluation](docs/saint-ai.md) for private credential prompts, catalog policy, request limits, known model errors, and local simulation instructions. The implementation does not guarantee that every valid emoji matches the message meaning.
+The backend reads `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_AUTH_TOKEN` from its private process environment. Supply them through your local environment or server-side secret configuration, then start the backend normally. Keep them out of browser variables, URLs and Git. Without credentials, core chat still works and AI requests return `AI_UNAVAILABLE`.
+
+The compact Unicode 17 catalog is bundled in `backend/src/emoji/catalog-data.ts`; selectable choices use default yellow and gender-neutral forms where available. The implementation does not guarantee that every valid emoji matches the message meaning. See the [WebSocket protocol](docs/websocket-protocol.md) for request limits and authorization rules.

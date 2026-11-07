@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import test from 'node:test';
 import { allowedEmoji, emojiCatalog, emojiTree, selectableEmojis, decisionAt, type ChoiceNode } from '../src/emoji/catalog.js';
@@ -40,6 +41,9 @@ index(emojiTree);
 
 test('the complete catalog stays versioned; selectable candidates enforce default variants and distinct descriptions', () => {
   assert.equal(emojiCatalog.length,3944);
+  // Pin entries, descriptions, grouping and order from the original Unicode 17 catalog.
+  assert.equal(createHash('sha256').update(JSON.stringify(emojiCatalog)).digest('hex'),
+    '2d1a75d8c232e6ca220dbfa2b134f1c78c04a61f71bae904b3c0d3aa51a7d12b');
   assert.equal(routes.size,selectableEmojis.length);
   for (const emoji of ['👍🏿','👩‍💻','👨‍💻','🤴','👸','🎅','🤶','🤰','🫃','👫','👩‍❤️‍💋‍👨']) assert.equal(allowedEmoji.has(emoji),false,emoji);
   for (const emoji of ['👍','🧑‍💻','🫅','🧑‍🎄','🫄','🧑‍🤝‍🧑','💏','💑','🐘','🇹🇭','🎸','💻']) assert.ok(allowedEmoji.has(emoji),emoji);

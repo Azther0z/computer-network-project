@@ -129,7 +129,7 @@ Primary: R5–R11. Poom’s handlers rely on Guitar’s authentication guard; au
 
 ## Saint — AI emoji firework
 
-Saint owns the AI special feature: a user selects a message, then Cloudflare Clef chooses an emoji from a versioned Unicode catalog and displays it as a local firework effect. The full catalog replaces the earlier 20-emoji proposal. Selectable choices use default yellow and gender-neutral forms where available. See [Saint's implementation and evaluation](saint-ai.md).
+Saint owns the AI special feature: a user selects a message, then Cloudflare Clef chooses an emoji from a versioned Unicode catalog and displays it as a local firework effect. The full catalog replaces the earlier 20-emoji proposal. Selectable choices use default yellow and gender-neutral forms where available. See the [AI setup](../README.md#ai-emoji-effect).
 
 This feature is implemented only after the R1–R11 core chat flow passes. It is not a replacement for normal message delivery, room membership checks or persistent history.
 
