@@ -18,6 +18,7 @@ backend/data/*.sqlite-shm
 Thumbs.db
 .idea/
 .vscode/
+.history/
 *.swp
 
 # Temporary work

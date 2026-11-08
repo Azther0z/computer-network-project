@@ -1,85 +1,157 @@
-# Talkmato Socket.IO event protocol
+# Socket.IO protocol
 
-This is the account-login protocol for Talkmato. Use `socket.io-client` and Node Socket.IO with WebSocket-only transport, path `/socket.io/`, default namespace `/`. See [architecture](architecture.md), [data model](data-model.md), [examples](websocket-examples.md) and [implementation ownership](implementation-ownership.md).
+Use `socket.io-client` and Node Socket.IO with WebSocket-only transport, path `/socket.io/`, and namespace `/`. Each command sends one object and an acknowledgement callback. Objects are not JSON strings, batches, or raw WebSocket frames.
 
-## Connection and authentication
+Success is `{ok: true, data: ...}`. Failure is `{ok: false, error: {code, message}}`. Validate payloads at runtime. Derive the actor from the authenticated socket. Commit durable mutations before success or broadcast.
 
-Every Socket.IO `connect` checks for Talkmato’s unexpired eight-hour HTTP-only session cookie. It then emits `auth.session` with a snapshot when restoration succeeds, or an empty payload when it does not; only in the latter case are `auth.register` and `auth.login` required. A connected transport alone is not account identity.
+## Authentication and cookie exchange
 
-The client enables bounded transport reconnect but freezes history/writes while unauthenticated. It must not save a plaintext password or opaque session ID in localStorage, or automatically replay login credentials. After an expired/absent session, show sign-in-required UI. Do not enable generic command retries or Socket.IO buffering for application writes.
+Each connection checks the eight-hour HTTP-only cookie and emits `auth.session`. A valid session returns an account snapshot. Otherwise the payload is empty and registration/sign-in is required. The browser attempts at most five automatic transport reconnects, with delays from one to five seconds. Commands remain blocked until authentication succeeds.
 
-Use HTTPS/WSS in public deployment. Never log or expose passwords in URLs, DTOs, source code or browser storage. The server stores a password hash only. One active socket is allowed per account; a second authenticated login returns `SESSION_IN_USE` and does not take over the existing connection.
+After registration/login, the browser calls `POST /session` with credentials enabled and the authenticated socket ID in `x-talkmato-socket-id`. The HTTP server checks the configured origin, creates a server session, and sets `talkmato_session`. The cookie uses `HttpOnly`, `SameSite=Lax`, path `/`, an eight-hour maximum age, and `Secure` in production. Its opaque ID never enters a JavaScript response or browser storage.
 
-## Commands and acknowledgements
+`auth.logout` clears the socket's identity and delivery subscriptions. The client calls `DELETE /session` to revoke the current cookie's server record and expire the cookie. Account deletion revokes every session for that account. Disconnect alone retains sessions and saved data.
 
-Each command uses one event, one object payload and an acknowledgement callback. Success is `{ok: true, data: ...}`. Failure is `{ok: false, error: {code, message}}`. Reject invalid payloads before mutation. Durable changes commit before acknowledgement or live broadcast.
+One account has one active socket. A competing login returns `SESSION_IN_USE`. Invalid name/password combinations return the same generic error. Public traffic uses HTTPS/WSS. No password, hash, or session ID belongs in URLs, logs, or public data.
 
-| Client event | Payload | Success data | Rules |
-| --- | --- | --- | --- |
-| `auth.register` | `{name: string, password: string}` | `{snapshot: AccountSnapshot}` | Validate input, atomically reserve name, hash/store password, authenticate current socket and join authorized delivery channels. |
-| `auth.login` | `{name: string, password: string}` | `{snapshot: AccountSnapshot}` | Verify password hash, enforce single active socket, authenticate socket and join authorized delivery channels. Invalid credentials reveal no account-existence detail. |
-| `auth.logout` | `{}` | `{}` | Remove authentication/live presence from current socket only; durable data remains. |
-| `auth.deleteAccount` | `{password: string}` | `{}` | Irreversibly delete the authenticated account after password confirmation; revoke sessions and anonymize its old messages as `Unknown`. |
-| `private.open` | `{peerId: string}` | `{room: PrivateRoom}` | Find/create persisted pair; an initial peer must be online; existing rooms remain usable with an offline peer. |
-| `group.create` | `{name: string}` | `{group: Group}` | Create persistent group with creator only. |
-| `group.join` | `{roomId: string}` | `{group: Group}` | Requester adds only self; first join writes history boundary; repeat keeps it. |
-| `room.send` | `{roomId: string, clientMessageId: string, text: string}` | `{message: Message, replayed: boolean}` | Check actor/membership, commit once, then emit to connected eligible members. |
-| `room.history` | `{roomId: string, beforeSeq?: number, limit?: number}` | `HistoryPage` | Check persisted membership and group first-join boundary; default 50, maximum 100. |
-| `typing.set` | `{roomId: string, isTyping: boolean}` | `{}` | Member-only transient status; no draft text; throttle active updates. Implement after R1–R11. |
-| `message.emojiSuggest` | `{roomId: string, messageId: string}` | `{emoji: string, attachment: MessageEmoji}` | Authorize visibility, then reuse the first saved result or make one bounded Clef request. Save before acknowledgement and eligible-reader delivery; one selection in flight per message. |
+## Client commands
 
-`auth.register` and `auth.login` return `ALREADY_AUTHENTICATED` if the socket already has an account. Every other application command on an unauthenticated socket returns `NOT_AUTHENTICATED` without revealing room data. `auth.logout` on an unauthenticated socket returns `NOT_AUTHENTICATED`.
-
-`auth.deleteAccount` requires the current account password. It clears live presence and all server sessions, removes the account from public group-member lists, and releases the name for a new account. It does not remove durable messages: their sender DTO becomes `<Unknown>`, so a later account with the same name is never associated with historical content. A remaining private-chat peer also sees `<Unknown>` as that room’s title.
-
-`room.send` uses a browser-generated UUID for `clientMessageId`. An identical manual retry returns the committed message with `replayed: true`; a different room/text with that same key returns `CLIENT_MESSAGE_ID_CONFLICT`. Do not automatically retry sends, joins, group creation, typing or AI requests.
-
-## Server events and audience
-
-| Event | Payload | Recipients |
+| Event | Payload | Success data / rule |
 | --- | --- | --- |
-| `users.snapshot` | `{users: User[]}` | Authenticated online clients; includes self and only connected users. |
-| `auth.session` | `{snapshot?: AccountSnapshot}` | The newly connected socket, after its cookie-session check completes. |
-| `groups.snapshot` | `{groups: Group[]}` | Authenticated online clients; all groups with online/offline member detail. |
-| `private.opened` | `{room: PrivateRoom}` | Online private participants only, when initially created. |
-| `private.updated` | `{room: PrivateRoom}` | Remaining online private participant after a peer deletes their account; peer name becomes `<Unknown>`. |
-| `message.created` | `Message` | Connected members eligible to read that message, including sender. |
-| `message.emojiAdded` | `{roomId, messageId, attachment: MessageEmoji}` | Authenticated connected members permitted to read that message, including requester. Recheck persisted membership and group join boundary per recipient. |
-| `typing.updated` | `{roomId, userId, isTyping, expiresInMs}` | Other connected current room members only. |
+| `auth.register` | `{name, password}` | `{snapshot: AccountSnapshot}`. Reserve the canonical name and store an Argon2id hash. |
+| `auth.login` | `{name, password}` | `{snapshot: AccountSnapshot}` after password verification. |
+| `auth.logout` | `{}` | `{}`. Detach the current live identity. |
+| `auth.deleteAccount` | `{password}` | `{}` after password confirmation and durable tombstoning. |
+| `private.open` | `{peerId}` | `{room: PrivateRoom}`. Initial peer must be online and different from the actor. Existing rooms support offline peers. |
+| `group.create` | `{name}` | `{group: Group}` with the creator as sole initial member. |
+| `group.join` | `{roomId}` | `{group: Group}`. Join only self. Preserve the first-join history boundary. |
+| `room.send` | `{roomId, clientMessageId, text}` | `{message: Message, replayed: boolean}`. Save once after membership checks. |
+| `room.history` | `{roomId, beforeSeq?, limit?}` | `HistoryPage`. Default 50, maximum 100. Enforce persisted visibility on every page. |
+| `typing.set` | `{roomId, isTyping}` | `{}`. Transient, member-only, without draft text. |
+| `message.emojiSuggest` | `{roomId, messageId}` | `{emoji, attachment: MessageEmoji}`. Authorize the selected persisted message, then reuse or save its first result. |
 
-There is no `room.closed` on disconnect. Clear runtime presence/typing and emit updated directories; do not delete account, membership or history. After successful register/login, acknowledge the account snapshot before resulting directory events.
+Register/login reject an already authenticated socket with `ALREADY_AUTHENTICATED`. Other application commands reject unauthenticated sockets with `NOT_AUTHENTICATED`. A connected transport and cached display are not authentication.
 
-Typing true expires after 3000 ms. Clear it on local/peer disconnect, sign-out, room switch, empty draft, send, explicit false or expiry. Never save/replay it.
+The browser generates a UUID `clientMessageId`. Identical manual retries return `replayed: true` without another insert or broadcast. Different room/text with the same sender/key returns `CLIENT_MESSAGE_ID_CONFLICT`. No application write is retried automatically.
 
-AI results attach to messages durably, with one successful selection per message shared by all readers. `MessageEmoji` contains `{emojiId, emoji, createdAt}`. Commit before acknowledging or emitting `message.emojiAdded`. Later requests authorize visibility and return the first saved attachment without another provider call, insert or event. Existing multi-emoji messages retain all their saved attachments in history. 🍅 is the default for unclear/unmatched messages and unrecognized provider choices in otherwise valid responses. Provider or storage failures and malformed response data remain retryable errors.
+## Server events
 
-Browsers merge attachments from history, events and acknowledgements by `emojiId`. Hide the AI action immediately while choosing and whenever any saved attachment exists, including after refresh. Failures with no saved result offer manual retry. New attachments animate on first appearance in the current chat session and remain as replay buttons. Duplicate delivery, rerender or room switch does not automatically replay a seen attachment. Clicking a saved emoji replays locally without a server command or AI call. A refreshed/reconnected chat starts a new rendering session.
+| Event | Payload | Audience |
+| --- | --- | --- |
+| `auth.session` | `{snapshot?: AccountSnapshot}` | Newly connected socket after its session check. |
+| `users.snapshot` | `{users: User[]}` | Authenticated clients. Connected users only, including the viewer. |
+| `groups.snapshot` | `{groups: Group[]}` | Authenticated clients. All groups and online/offline member details. |
+| `private.opened` | `{room: PrivateRoom}` | Online private participants after initial room creation. |
+| `private.updated` | `{room: PrivateRoom}` | Remaining online peer after account deletion. Deleted peer becomes `<Unknown>`. |
+| `message.created` | `Message` | Connected eligible room members, including sender. |
+| `message.emojiAdded` | `{roomId, messageId, attachment: MessageEmoji}` | Connected readers who can see that message, including requester. Check each recipient's persisted visibility. |
+| `typing.updated` | `{roomId, userId, isTyping, expiresInMs}` | Other connected members of that room. |
 
-AI requests accept exactly `roomId` and `messageId`, without client-supplied text or identity. Apply the same persisted membership and first-join visibility rules as history. Missing and pre-join messages both return `MESSAGE_NOT_AVAILABLE`. After the provider returns, recheck the socket identity and message visibility before acknowledging success. Logout and disconnect cancel pending provider work.
+Successful register/login acknowledges its account snapshot before resulting directory events. Disconnect does not emit `room.closed` or delete rooms. Typing true expires after 3000 ms. Clear it on stop, send, empty draft, room switch, sign-out, disconnect, or expiry. It is never persisted or replayed.
 
-One account has at most one AI request in flight and a one-second start cooldown. Each message permits one in-flight selection; competing requests return `AI_RATE_LIMITED`. The single backend permits two concurrent AI requests. Saved results bypass provider work and its limits after authorization. These limits are transient process state, not a billing cap. The provider operation has an eight-second total deadline, below the browser's ten-second acknowledgement timeout. No provider request is automatically retried. See the [AI setup](../README.md#ai-emoji-effect).
+## Public data
+
+| Shape | Fields |
+| --- | --- |
+| User | `userId`, `name`, `online: boolean` |
+| PrivateRoom | `roomId`, `kind: "private"`, `members: User[2]` |
+| Group | `roomId`, `kind: "group"`, `name`, `members: User[]` |
+| Message | `seq`, `messageId`, `clientMessageId`, `roomId`, `senderId`, `senderName`, `text`, `sentAt`, `emojis: MessageEmoji[]` |
+| MessageEmoji | `emojiId`, `emoji`, `createdAt` |
+| AccountSnapshot | `self: User`, `users: User[]`, `groups: Group[]`, `privateRooms: PrivateRoom[]` |
+| HistoryPage | `roomId`, `messages: Message[]`, `nextBeforeSeq: number or null`, `highWatermarkSeq: number` |
+
+`beforeSeq` is exclusive. History pages ascend by server sequence. `nextBeforeSeq` is the oldest returned sequence only when an older accessible page remains. `highWatermarkSeq` is the largest accessible room sequence at the query snapshot. Internal records and password hashes never enter these shapes. Account snapshots expose only the caller's private rooms.
+
+## Message and history path
+
+```mermaid
+sequenceDiagram
+    participant C as Browser
+    participant S as Socket.IO backend
+    participant D as SQLite
+    participant R as Eligible readers
+    C->>S: room.send with clientMessageId
+    S->>D: Check membership and deduplication key
+    alt New message
+        S->>D: Commit message
+        S-->>R: message.created
+        S-->>C: Ack saved message
+    else Identical manual retry
+        S-->>C: Ack existing message, replayed true
+    end
+    C->>S: room.history, optional beforeSeq
+    S->>D: Read page within join boundary
+    S-->>C: Messages, cursor, high watermark
+    Note over C: Merge by ID and sequence, preserve live arrivals
+```
+
+The client refreshes the newest window after session restoration, then continues older reads from the refreshed cursor. This avoids skipping messages sent during an outage. Failed reads offer Retry for the same query. Late responses cannot update another room or a later connection. The [UI reference](ui-ux.md) defines scrolling and display-cache behavior.
+
+## AI selection path
+
+```mermaid
+sequenceDiagram
+    participant C as Requesting browser
+    participant S as Backend
+    participant D as SQLite
+    participant AI as Cloudflare Clef
+    participant R as Eligible readers
+    C->>S: message.emojiSuggest
+    S->>D: Check visibility and saved result
+    alt Result already saved
+        S-->>C: Ack first saved attachment
+    else First selection
+        S->>AI: Stored text and 240 choices
+        AI-->>S: One choice
+        S->>S: Validate result and recheck access
+        S->>D: Commit first attachment
+        S-->>R: message.emojiAdded
+        S-->>C: Ack attachment
+    end
+    Note over C,R: History restores attachments and replay stays local
+```
+
+The model is `@cf/cloudflare/clef`. One Choice question contains all 240 curated default-form candidates, within the 255-option limit. Only the selected stored text and choice descriptions reach the provider. Tone/intent takes priority. Neutral text uses a related subject. Unclear/unmatched meaning and unrecognized choices in otherwise valid data fall back to 🍅. Malformed data and provider failures remain errors.
+
+Allow one request per account in flight, a one-second account start cooldown, one selection per message in flight, and two provider requests globally. Saved results bypass provider limits after authorization. The provider deadline is eight seconds, below the ten-second browser acknowledgement timeout. No provider request is automatically retried. These limits are temporary process state, not a spending cap.
+
+Logout/disconnect cancels pending provider work. Recheck identity and message visibility afterward. Commit the first result before acknowledgement or delivery. Repeated requests return it without another provider call, insert, or event. History preserves legacy multi-emoji attachments. Browsers merge attachments by `emojiId`. Animation and local replay rules belong to [UI and interaction](ui-ux.md#typing-and-emoji-effects).
 
 ## Validation and errors
 
-- Names: trim/NFC normalize, reject Unicode `Cc`, 1–32 code points; canonical form is locale-independent lowercase.
-- Passwords: 8–128 characters. Never return or log their contents.
-- Group names: 1–64 code points.
-- Message text: 1–4000 code points and not whitespace-only.
-- Validate all payloads at runtime despite TypeScript.
+Normalize account names with trim and NFC. Reject Unicode `Cc` controls. Names permit 1–32 code points and use locale-independent lowercase for uniqueness. Passwords permit 8–128 code points. Group names permit 1–64 code points after trimming. Messages permit 1–4000 code points and cannot be whitespace-only.
 
 | Code | Meaning |
 | --- | --- |
-| `INVALID_PAYLOAD` | Invalid fields or wrong event arguments. |
-| `NOT_AUTHENTICATED` / `ALREADY_AUTHENTICATED` | Socket authentication state does not permit command. |
-| `NAME_TAKEN` | Name belongs to an existing account, including offline accounts. |
-| `INVALID_CREDENTIALS` | Name/password combination is invalid; do not disclose which field failed. |
-| `SESSION_IN_USE` | Account already has an active socket; no takeover occurs. |
+| `INVALID_PAYLOAD` | Invalid fields or event arguments. |
+| `NOT_AUTHENTICATED` / `ALREADY_AUTHENTICATED` | Identity state does not permit the command. |
+| `NAME_TAKEN` | Canonical name belongs to an account, including an offline account. |
+| `INVALID_CREDENTIALS` | Credentials or deletion confirmation failed. |
+| `SESSION_IN_USE` | Account already has an active socket. |
 | `USER_OFFLINE` / `SELF_CHAT_NOT_ALLOWED` | Invalid initial private-room peer. |
-| `ROOM_NOT_FOUND` / `WRONG_ROOM_TYPE` / `NOT_MEMBER` | Missing/inaccessible room, wrong kind or membership failure. |
-| `MESSAGE_NOT_AVAILABLE` | Missing or historically inaccessible selected AI message. |
-| `CLIENT_MESSAGE_ID_CONFLICT` | Deduplication key reused with different content. |
-| `AI_UNAVAILABLE` / `AI_INVALID_RESPONSE` | Provider failure or malformed response data. An unrecognized choice in otherwise valid data defaults to 🍅. |
-| `AI_RATE_LIMITED` | Account cooldown, account/message selection already in flight, or global AI concurrency limit. |
-| `STORAGE_UNAVAILABLE` / `INTERNAL_ERROR` | No durable success; do not expose implementation detail. |
+| `ROOM_NOT_FOUND` / `WRONG_ROOM_TYPE` / `NOT_MEMBER` | Room lookup, kind, or membership rejected. |
+| `MESSAGE_NOT_AVAILABLE` | Missing selected message or exclusion by its join boundary. |
+| `CLIENT_MESSAGE_ID_CONFLICT` | A deduplication key was reused with different content. |
+| `AI_UNAVAILABLE` / `AI_INVALID_RESPONSE` | Provider access failed or returned malformed data. |
+| `AI_RATE_LIMITED` | Account cooldown or account/message/global concurrency limit. |
+| `STORAGE_UNAVAILABLE` / `INTERNAL_ERROR` | Operation failed without a durable success acknowledgement. |
 
-Prioritize authorization before exposing room/type/message metadata. Test invalid credentials, duplicate-name registration, stale socket cleanup, private/group isolation, first-join history exclusion, duplicate sends, typing expiry and AI message visibility.
+Authorize before exposing room/type/message metadata. Public errors do not expose database or provider details.
+
+## Request examples
+
+These are individual Socket.IO calls with synthetic IDs. The acknowledgement is the return value, not another client command.
+
+```js
+const page = await socket.timeout(10000).emitWithAck('room.history', {
+  roomId: 'g-study', beforeSeq: 101, limit: 50,
+});
+const result = await socket.timeout(10000).emitWithAck('room.send', {
+  roomId: 'g-study', clientMessageId: crypto.randomUUID(), text: 'Hello',
+});
+// Success: {ok: true, data: {message: {...}, replayed: false}}
+// Failure: {ok: false, error: {code: 'NOT_MEMBER', message: '...'}}
+```
+
+Application UI uses AuthGate's guarded request callback rather than emitting through a second socket.

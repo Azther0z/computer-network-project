@@ -1,124 +1,62 @@
-# Talkmato UI and interaction design
+# UI and interaction
 
-Talkmato is a tomato-themed browser chat app. The original user-supplied SVG exports in `docs/wireframes/` remain the visual/brand reference. They are static examples, not runtime evidence and not authority for outdated token-resume, tomato-reaction or AI Voice Chat behavior.
+The user-supplied SVGs in [wireframes/](wireframes/) are the visual and brand reference. Keep their original bytes and filenames. Their token-resume, tomato-picker, and AI Voice Chat examples do not define current behavior.
 
-The current implementation baseline is full account registration/sign-in, room-scoped typing and an AI-selected emoji firework. See [architecture](architecture.md), [protocol](websocket-protocol.md), [data model](data-model.md) and [implementation ownership](implementation-ownership.md).
+Use the Talkmato logo and palette: tomato red `#E7473F`, cream `#FFF8EE`, charcoal `#292725`, and leaf green `#79A66A`. Incoming messages align left. Own messages align right. The desktop layout places directories beside the conversation. The mobile wireframes describe the compact visual reference.
 
-## Visual concept
-
-- Use the supplied Talkmato logo and the CI-board palette: tomato red `#E7473F`, cream `#FFF8EE`, charcoal `#292725` and leaf green `#79A66A`.
-- Desktop: online users/private chats/groups at left, conversation center, optional group member panel at right.
-- Mobile: separate directory and active-chat views with a Conversations back action.
-- Incoming messages are left aligned; own messages are right aligned.
-- Public group details show online and offline members. The online-user directory contains connected users only, including self.
-
-## Account flow
+## Account and connection lifecycle
 
 ```mermaid
-flowchart TD
-    A[Open Talkmato] --> B[Connect Socket.IO transport]
-    B --> C{New account or returning account?}
-    C -->|New| D[Register name and password]
-    C -->|Returning| E[Sign in with name and password]
-    D --> F{Valid and unused name?}
-    E --> G{Valid credentials and no active socket?}
-    F -->|No| D
-    G -->|No| E
-    F -->|Yes| H[Authenticated snapshot]
-    G -->|Yes| H
-    H --> I[Show workspace and load authorized history]
-    I --> J[Chat]
-    J -->|Transport loss| K[Read-only reconnecting state]
-    K -->|Transport restored| L[Sign in required]
-    L --> E
+stateDiagram-v2
+    state "Checking session" as CheckingSession
+    state "Cached read-only" as CachedReadOnly
+    state "Sign in" as SignIn
+    [*] --> Connecting
+    Connecting --> CheckingSession: transport connected
+    CheckingSession --> Chat: valid cookie
+    CheckingSession --> SignIn: no valid session
+    SignIn --> Chat: register or login succeeds
+    Chat --> CachedReadOnly: transport lost
+    CachedReadOnly --> CheckingSession: reconnect
+    CheckingSession --> CachedReadOnly: transport fails with cached chat
+    CheckingSession --> Connecting: transport fails without cached chat
+    Chat --> SignIn: sign out or account deleted
 ```
 
-The browser never saves the password or a resume token. After successful sign-in, it receives an eight-hour HTTP-only cookie session; refresh/reopen restores the account only while that cookie is valid. The server then restores that account’s authorized rooms and saved history. Sign out revokes the session.
+`AuthGate` mounts `useAccountAuth` once. Chat consumes its socket and guarded request function. It does not open another connection. A valid cookie restores the account without replaying credentials. An absent/expired cookie requires sign-in. A second active socket receives `SESSION_IN_USE`.
 
-The signed-in workspace offers **Delete account**. It requires password confirmation and is irreversible: the account is signed out, old messages and remaining private-room labels display as `<Unknown>`, and its name becomes available to a new account.
+During temporary loss, cached messages, selected room, and draft remain visible in memory. The workspace labels the directory as last known online. Server-backed actions, typing, history reads, and AI selection are disabled. Reconnect is available. Saved emoji replay remains local.
 
-## Figma source screens
+Live authentication clears immediately on disconnect. The separate display cache grants no access. Failed restoration, sign-out, account deletion, an uncertain deletion outcome, or a different restored account discards it. Same-account restoration refreshes the newest history window while retaining the selected room and draft. Older pages are then available from the refreshed cursor. No cache or credentials are saved in browser storage.
 
-| Source | Current use |
+Registration uses a unique name, password, and confirmation. Sign-in uses the same name/password. Forms clear password fields after submission and show generic invalid-credential errors. Delete account requires password confirmation. It is irreversible and leaves old messages labeled `<Unknown>`.
+
+## Conversation behavior
+
+| Action | Result |
 | --- | --- |
-| Sign in / name error | Adapt to Register and Sign in forms with name/password fields and server errors. |
-| Welcome | No selected conversation and authenticated shortcuts. |
-| Private chat | Private conversation layout; do not treat tomato picker as selected behavior. |
-| Create Group | Creator-only group modal. |
-| Group preview / joined group | Member details before join, no pre-join messages, then member-only chat. |
-| Disconnected | Cached conversation becomes read-only; after transport reconnect, ask the user to sign in. |
-| Mobile screens | Directory-to-chat navigation. |
-| AI Voice Chat | Not selected; omit or label unavailable. |
+| Select an online person | Find/create the pair's private room. An existing room remains usable while its peer is offline. |
+| Inspect a group | Show all members, including offline members. Nonmembers see metadata and Join, without history or a composer. |
+| Create a group | Persist the creator as its only initial member. |
+| Join | Add only the requester and load messages from the permanent first-join boundary. |
+| Open a joined room | Load the newest 50 accessible messages. Merge live arrivals by message ID/sequence. |
+| Load older | Request the previous page, preserve reading position, and stop when no cursor remains. |
+| Retry history | Repeat the failed read with its original cursor. Keep already loaded messages visible. Late replies cannot replace another room or account. |
+| Send | Await the saved result. An unknown outcome offers a manual retry with the same message ID. |
+| Enter / Shift+Enter | Send / insert a newline. Enter during input-method composition never sends. |
 
-Keep all original SVG files unchanged. Do not restore a removed generated HTML mockup or silently alter the Figma exports.
+Group names permit 1–64 Unicode code points. Messages permit 1–4000 and cannot be whitespace-only. A code point is a Unicode value, not a displayed glyph. An emoji with modifiers can contain several code points.
 
-## Rooms and chat flow
+The online directory lists connected accounts, including the viewer. Group details include offline members. Message text renders as text, never HTML. History loading, storage failures, and unknown send results do not claim unsaved content was accepted.
 
-```mermaid
-flowchart TD
-    W[Authenticated workspace] --> P[Select online person]
-    P --> Q[Find or create private room]
-    Q --> R[Load authorized history]
-    W --> G[Inspect group and all members]
-    G --> H{Current member?}
-    H -->|No| J[Show Join; hide history and composer]
-    J --> K[Join self and save visibility boundary]
-    K --> L[Load messages from join boundary]
-    H -->|Yes| I[Load authorized history]
-    W --> C[Create group]
-    C --> D[Persist creator as sole initial member]
-    I --> S[Send with clientMessageId]
-    L --> S
-    S --> T[Server commits before acknowledgement]
-    T --> U[Show once; deliver to eligible connected members]
-```
+## Typing and emoji effects
 
-An existing private room remains usable when its peer is offline. Group creators cannot automatically add others. A first-time group member never sees older messages merely because artwork shows sample conversation text.
+Typing appears only to other connected room members. It carries no draft text. The client throttles active updates and clears status on send, empty draft, room switch, sign-out, disconnect, or expiry. Typing is never stored.
 
-## Selected special features
+The accessible diamond action sits beside each message without a saved emoji: right of received bubbles and left of sent bubbles. It disappears while selection is pending and after the first result is saved for all eligible readers. Failures offer manual retry. An amber dot marks a failed action, with an announced explanation and retry tooltip.
 
-| Feature | Behavior |
-| --- | --- |
-| Typing indicator | “Alex is typing…” is visible only to other eligible members of the active room. Never show draft text. Stop it on send, empty draft, room switch, sign-out/disconnect or expiry. It is never persisted. |
-| AI emoji firework | Offer the accessible action on visible messages without saved results. Hide it immediately while choosing, then keep it removed for every reader after the first result is saved; failures allow retry. Use 🍅 for unclear/unmatched meaning or an unrecognized provider choice. Save and deliver the result to eligible readers. Keep saved emoji buttons, including existing multi-emoji messages, with a brief firework on first appearance per chat session. Clicking a saved button replays locally without another AI request. History restores emojis; rerenders, duplicate deliveries and room switches do not replay seen attachments. Respect reduced-motion preference with a still emoji. |
-| Account creation/sign-in | Persistent accounts make it possible to sign in later and retrieve authorized history. This is core project behavior; confirm separately with the instructor whether it receives a special-feature point. |
-| AI Voice Chat / tomato reaction | Not selected. Omit from implementation even if visible in a static wireframe. |
+Saved emoji buttons replace the diamond in that position. Each attachment animates once per mounted chat session. Duplicate delivery, rerender, room switch, and same-account cached reconnect do not replay a seen attachment. Clicking a saved emoji replays locally without a request. Reloading or clearing the workspace resets this temporary replay state.
 
-## Action mapping
+The firework covers the conversation pane without blocking input or moving with message scrolling. Every play samples fresh sizes, positions, travel, rotation, and timing. Reduced motion shows a still emoji. Keep keyboard/touch access, visible focus, labels, and readable contrast. Do not steal focus for live messages.
 
-| Action | Event/state | Screen result |
-| --- | --- | --- |
-| Register | `auth.register` | Authenticate socket, show snapshot/workspace. |
-| Sign in | `auth.login` | Authenticate socket, show same account’s rooms and load history. |
-| Sign out | `auth.logout` | Return to sign-in view; durable data remains. |
-| Select person | `private.open` | Open persisted pair room and load history. |
-| Create group | `group.create` | Creator-only group; open it after success. |
-| Join group | `group.join` | Add self, then enable history/composer from join boundary. |
-| Load room | `room.history` | Loading state, messages and Load older. |
-| Send | `room.send` with `clientMessageId` | Pending until acknowledgement; explicit retry uses same key. |
-| Type | `typing.set` / `typing.updated` | Transient room-scoped status only. |
-| AI emoji effect | `message.emojiSuggest`, `message.emojiAdded`, history `emojis` | Once per message: hide action while choosing and after save; show saved emoji, first-render firework and local replay. 🍅 is the unknown default; malformed data and provider failures allow retry. |
-
-## Accessibility and error states
-
-- Use labeled native controls, visible focus and readable contrast.
-- Forms must not retain or prefill password values after an error/logout.
-- Use Enter to send and Shift+Enter for a newline; do not send during IME composition.
-- Render message text as text, not HTML.
-- Do not steal focus when live messages arrive.
-- AI emoji actions must work by keyboard and touch, not hover only. The icon-only diamond keeps an accessible label and tooltip. Place it beside the bubble, on the right for received messages and the left for sent messages; saved emoji replay buttons replace it in the same position.
-- Keep diamond and saved emoji controls borderless, with a subtle hover background and visible keyboard focus. Failed AI requests mark the diamond with an amber dot; announce the explanation and include it in the retry tooltip rather than inserting an error row into the conversation.
-- Fireworks use a shared overlay covering the conversation pane, including its header and composer. Keep it independent of message scrolling, clipped to the pane and transparent to pointer input. Randomize particle sizes, positions, trajectories, rotation and timing once per play; rerenders must not change particles mid-animation. Reduced motion suppresses moving particles and shows a still emoji.
-- Keep chat actions disabled while unauthenticated, disconnected or loading an authentication result.
-
-| State | Copy/actions |
-| --- | --- |
-| Transport lost | “Connection lost. Reconnecting…”; cached messages read-only. |
-| Transport restored | “Sign in to continue.”; no chat commands until authentication acknowledgement. |
-| Invalid credentials | Generic “Name or password is incorrect.”; do not reveal account existence. |
-| Session in use | Explain the account is active in another browser; allow retry after it closes. |
-| History loading | “Loading saved messages…” with recoverable Retry. |
-| Storage unavailable | Keep visible cache read-only; do not claim unsaved messages were accepted. |
-| AI unavailable | Leave selected message unchanged and provide Retry; do not invent an AI result. |
-
-Review with two physical-client machines and a third user where needed: account privacy, online list, private/group isolation, self-join, pre-join history exclusion, typing isolation, sign-out/sign-in history restoration, keyboard/touch AI action and reduced-motion behavior.
+The [protocol](websocket-protocol.md#ai-selection-path) defines persisted authorization, provider limits, result reuse, and failure handling.
