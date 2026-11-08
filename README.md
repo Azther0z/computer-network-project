@@ -47,6 +47,7 @@ Use focused branches and Conventional Commit subjects such as `fix(chat): preser
 
 | Responsibility | Assigned owner |
 | --- | --- |
+| Architecture design, UI design | Pim |
 | Accounts, authentication, presence, typing backend | Guitar |
 | Rooms, memberships, messages, conversation UI, typing UI | Poom |
 | AI emoji selection and firework | Saint |
