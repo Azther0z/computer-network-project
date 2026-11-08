@@ -40,10 +40,11 @@ function SavedEmoji({ attachment, seenEmojiIds, fireworkTarget }: {
 }
 
 /** Attachments are durable; animation state stays in the viewing browser. */
-export function MessageEmojiEffect({ roomId, messageId, request, attachments = emptyEmojis, seenEmojiIds, onAttachment, fireworkTarget }: {
+export function MessageEmojiEffect({ roomId, messageId, request, attachments = emptyEmojis, seenEmojiIds, onAttachment, fireworkTarget, disabled = false }: {
   roomId: string; messageId: string; request: Request; attachments?: MessageEmoji[];
   seenEmojiIds?: Set<string>; onAttachment?: (attachment: MessageEmoji) => void;
   fireworkTarget?: HTMLElement | null;
+  disabled?: boolean;
 }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,7 +57,7 @@ export function MessageEmojiEffect({ roomId, messageId, request, attachments = e
   const emojis = mergeMessageEmojis(attachments, confirmed);
 
   async function suggest(): Promise<void> {
-    if (inFlight.current || emojis.length > 0) return;
+    if (disabled || inFlight.current || emojis.length > 0) return;
     inFlight.current = true;
     const current = generation.current;
     setPending(true);
@@ -80,7 +81,7 @@ export function MessageEmojiEffect({ roomId, messageId, request, attachments = e
   }
 
   return <div className={styles.action}>
-    {emojis.length === 0 && !pending && <button type="button" className={`${styles.button} ${styles.aiButton} ${error ? styles.failed : ''}`} onClick={() => void suggest()}
+    {emojis.length === 0 && !pending && <button type="button" disabled={disabled} className={`${styles.button} ${styles.aiButton} ${error ? styles.failed : ''}`} onClick={() => void suggest()}
       aria-label={error ? 'Retry AI emoji effect' : 'AI emoji effect'} aria-describedby={error ? errorId : undefined}
       title={error ? `${error} Click to retry.` : 'AI emoji effect'}>
       <span aria-hidden="true">✧</span>

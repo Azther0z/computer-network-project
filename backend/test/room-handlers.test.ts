@@ -159,3 +159,49 @@ test('private rooms cannot be joined as groups', (t) => {
   if (result.ok) return;
   assert.equal(result.error.code, 'WRONG_ROOM_TYPE');
 });
+
+test('group and message limits count Unicode code points at both boundaries', (t) => {
+  const { storage, io, dependencies, alice } = setup();
+  t.after(() => storage.close());
+  const socket = new FakeSocket();
+  socket.data.actor = { userId: alice.userId, name: alice.name };
+  registerRoomHandlers(socket, io, storage, dependencies);
+  const group = socket.trigger('group.create', { name: '🍅'.repeat(64) });
+  assert.equal(group.ok, true);
+  if (!group.ok) return;
+  const { roomId } = group.data.group as { roomId: string };
+  assert.equal(socket.trigger('group.create', { name: '🍅'.repeat(65) }).ok, false);
+  const send = (text: string, clientMessageId: string) => socket.trigger('room.send', { roomId, text, clientMessageId });
+  assert.equal(send('🍅'.repeat(4000), 'valid-unicode').ok, true);
+  assert.equal(send('🍅'.repeat(4001), 'too-long-unicode').ok, false);
+  assert.equal(send(' '.repeat(10), 'blank').ok, false);
+  const history = socket.trigger('room.history', { roomId });
+  assert.equal(history.ok, true);
+  if (history.ok) assert.equal((history.data.messages as unknown[]).length, 1);
+});
+
+test('every older history page enforces the permanent group join boundary', (t) => {
+  const { storage, io, dependencies, alice, bob } = setup();
+  t.after(() => storage.close());
+  const group = storage.createGroup(alice.userId, 'History');
+  storage.sendMessage({ senderId: alice.userId, roomId: group.roomId, clientMessageId: 'hidden', text: 'Before join' });
+  storage.joinGroup(bob.userId, group.roomId);
+  for (let index = 0; index < 65; index++) {
+    storage.sendMessage({ senderId: alice.userId, roomId: group.roomId, clientMessageId: `visible-${index}`, text: `After join ${index}` });
+  }
+  const socket = new FakeSocket();
+  socket.data.actor = { userId: bob.userId, name: bob.name };
+  registerRoomHandlers(socket, io, storage, dependencies);
+  let beforeSeq: number | undefined;
+  const texts: string[] = [];
+  do {
+    const response = socket.trigger('room.history', { roomId: group.roomId, limit: 20, ...(beforeSeq ? { beforeSeq } : {}) });
+    assert.equal(response.ok, true);
+    if (!response.ok) return;
+    texts.push(...(response.data.messages as { text: string }[]).map(message => message.text));
+    beforeSeq = response.data.nextBeforeSeq as number | undefined;
+  } while (beforeSeq);
+  assert.equal(texts.length, 65);
+  assert.equal(new Set(texts).size, 65);
+  assert.ok(texts.every(text => text.startsWith('After join')));
+});

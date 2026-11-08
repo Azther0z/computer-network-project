@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, KeyboardEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import type { AccountSnapshot, Ack } from '@/lib/account-types';
 import type { ChatMessage, GroupRoom, MessageEmoji, MessageEmojiAdded, PrivateRoom } from '@/lib/chat-types';
@@ -9,13 +9,13 @@ import type { AccountAuth } from '@/components/feature/auth/use-account-auth';
 
 import styles from './chat-workspace.module.css';
 import { MessageEmojiEffect } from './emoji/message-emoji-effect';
+import { useRoomHistory, type HistoryPage } from './use-room-history';
 
 type SignedInAccount = AccountAuth & {
   snapshot: AccountSnapshot;
-  socket: NonNullable<AccountAuth['socket']>;
+  readOnly?: boolean;
 };
 type Room = PrivateRoom | GroupRoom;
-type HistoryPage = { roomId: string; messages: ChatMessage[] };
 type SendResult = { message: ChatMessage; replayed: boolean };
 type PrivateOpenResult = { room: PrivateRoom };
 type GroupResult = { group: Omit<GroupRoom, 'joined'> };
@@ -71,6 +71,7 @@ function errorMessage(response: Ack<unknown>): string {
 /** Uses the authenticated Socket.IO connection supplied by AuthGate; it never opens one. */
 export function ChatWorkspace({ account }: { account: SignedInAccount }) {
   const { snapshot, socket } = account;
+  const readOnly = account.readOnly ?? false;
   const requestRef = useRef(account.request);
   requestRef.current = account.request;
   const [privateRooms, setPrivateRooms] = useState<PrivateRoom[]>(snapshot.privateRooms);
@@ -87,7 +88,6 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [busy, setBusy] = useState(false);
-  const [loadingRoomId, setLoadingRoomId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pendingMessage, setPendingMessage] = useState<PendingMessage | null>(null);
   const [typingByRoom, setTypingByRoom] = useState<Record<string, string[]>>({});
@@ -99,6 +99,10 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
   const lastTypingUpdateRef = useRef(0);
   const memberDetailsRef = useRef<HTMLDivElement>(null);
   const messageAreaRef = useRef<HTMLElement>(null);
+  const composing = useRef(false);
+  const scrollAnchor = useRef<{ top: number; height: number } | null>(null);
+  const followLatest = useRef(true);
+  const scrolledRoom = useRef<string | null>(null);
 
   const rememberEmoji = useCallback(({ messageId, attachment }: MessageEmojiAdded) => {
     if (!isMessageEmoji(attachment)) return;
@@ -106,6 +110,7 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
   }, []);
 
   const sendTyping = useCallback((roomId: string, isTyping: boolean) => {
+    if (readOnly) return;
     const now = Date.now();
     if (isTyping && typingRoomRef.current === roomId && now - lastTypingUpdateRef.current < 500) return;
     if (isTyping) {
@@ -115,7 +120,7 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
       typingRoomRef.current = null;
     }
     void requestRef.current('typing.set', { roomId, isTyping }).catch(() => {});
-  }, []);
+  }, [readOnly]);
 
   useEffect(() => {
     setPrivateRooms((current) => mergeByRoomId(current, snapshot.privateRooms));
@@ -126,6 +131,7 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
   }, [snapshot.groups, snapshot.privateRooms, snapshot.self.userId]);
 
   useEffect(() => {
+    if (!socket || readOnly) return;
     const privateOpened = ({ room }: PrivateOpenResult) => {
       setPrivateRooms((current) => mergeByRoomId(current, [room]));
     };
@@ -154,13 +160,13 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
       socket.off('message.emojiAdded', rememberEmoji);
       socket.off('typing.updated', typingUpdated);
     };
-  }, [socket, rememberEmoji]);
+  }, [socket, readOnly, rememberEmoji]);
 
   const rooms = useMemo<Room[]>(() => [...privateRooms, ...groups], [groups, privateRooms]);
   const activeRoom = rooms.find((room) => room.roomId === activeRoomId) ?? null;
   const isGroupPreview = activeRoom?.kind === 'group' && !activeRoom.joined;
-  const activeMessages = activeRoomId === null ? [] : messagesByRoom[activeRoomId] ?? [];
-  const typingNames = activeRoom === null ? [] : (typingByRoom[activeRoom.roomId] ?? [])
+  const activeMessages = useMemo(() => activeRoomId === null ? [] : messagesByRoom[activeRoomId] ?? [], [activeRoomId, messagesByRoom]);
+  const typingNames = activeRoom === null || readOnly ? [] : (typingByRoom[activeRoom.roomId] ?? [])
     .filter((userId) => userId !== snapshot.self.userId)
     .map((userId) => activeRoom.members.find((member) => member.userId === userId)?.name)
     .filter((name): name is string => name !== undefined);
@@ -171,7 +177,7 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
   }, [activeRoom?.roomId, sendTyping]);
 
   useEffect(() => {
-    if (!activeRoom || isGroupPreview || !draft.trim()) {
+    if (readOnly || !activeRoom || isGroupPreview || !draft.trim()) {
       const roomId = typingRoomRef.current;
       if (roomId) sendTyping(roomId, false);
       return;
@@ -179,14 +185,52 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
     sendTyping(activeRoom.roomId, true);
     const refresh = window.setInterval(() => sendTyping(activeRoom.roomId, true), 1_000);
     return () => window.clearInterval(refresh);
-  }, [activeRoom, draft, isGroupPreview, sendTyping]);
+  }, [activeRoom, draft, isGroupPreview, readOnly, sendTyping]);
+
+  useLayoutEffect(() => {
+    const area = messageAreaRef.current;
+    if (!area) return;
+    if (scrolledRoom.current !== activeRoomId) {
+      scrolledRoom.current = activeRoomId;
+      scrollAnchor.current = null;
+      followLatest.current = true;
+    }
+    if (scrollAnchor.current) {
+      const anchor = scrollAnchor.current;
+      area.scrollTop = anchor.top + area.scrollHeight - anchor.height;
+      scrollAnchor.current = null;
+    } else if (followLatest.current) {
+      area.scrollTop = area.scrollHeight;
+    }
+  }, [activeRoomId, activeMessages]);
+
+  const acceptHistory = useCallback((page: HistoryPage, older: boolean) => {
+    const area = messageAreaRef.current;
+    if (older && area) scrollAnchor.current = { top: area.scrollTop, height: area.scrollHeight };
+    setMessagesByRoom(current => ({
+      ...current,
+      [page.roomId]: mergeMessages(
+        older ? current[page.roomId] ?? [] : (current[page.roomId] ?? []).filter(message => (message.seq ?? 0) > page.highWatermarkSeq),
+        page.messages,
+      ),
+    }));
+  }, []);
+  const history = useRoomHistory({
+    roomId: activeRoom && !isGroupPreview ? activeRoom.roomId : null,
+    enabled: !readOnly,
+    connectionId: socket?.id,
+    request: account.request,
+    onPage: acceptHistory,
+  });
 
   useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      if (messageAreaRef.current) messageAreaRef.current.scrollTop = messageAreaRef.current.scrollHeight;
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [activeRoomId, activeMessages]);
+    if (readOnly) {
+      setTypingByRoom({});
+      setDeletePassword('');
+      setShowDeleteAccount(false);
+      composing.current = false;
+    }
+  }, [readOnly]);
 
   useEffect(() => { setShowMemberDetails(false); }, [activeRoomId]);
 
@@ -201,30 +245,8 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
     return () => document.removeEventListener('pointerdown', handlePointerDown);
   }, [showMemberDetails]);
 
-  useEffect(() => {
-    if (!activeRoom || isGroupPreview) return;
-    let cancelled = false;
-    setLoadingRoomId(activeRoom.roomId);
-    setError(null);
-    void requestRef.current<HistoryPage>('room.history', { roomId: activeRoom.roomId })
-      .then((response) => {
-        if (cancelled) return;
-        if (!response.ok) {
-          setError(errorMessage(response));
-          return;
-        }
-        setMessagesByRoom((current) => ({
-          ...current,
-          [response.data.roomId]: mergeMessages(current[response.data.roomId] ?? [], response.data.messages),
-        }));
-      })
-      .catch(() => { if (!cancelled) setError('Connection changed. Sign in again before using chat.'); })
-      .finally(() => { if (!cancelled) setLoadingRoomId(null); });
-    return () => { cancelled = true; };
-  }, [activeRoom, isGroupPreview]);
-
   async function openPrivate(peerId: string): Promise<void> {
-    if (peerId === snapshot.self.userId || busy) return;
+    if (readOnly || peerId === snapshot.self.userId || busy) return;
     setBusy(true);
     setError(null);
     try {
@@ -240,7 +262,7 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
   }
 
   async function joinGroup(group: GroupRoom): Promise<void> {
-    if (busy) return;
+    if (readOnly || busy) return;
     setBusy(true);
     setError(null);
     try {
@@ -255,6 +277,7 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
   }
 
   async function sendWithId(message: PendingMessage): Promise<void> {
+    if (readOnly || busy) return;
     setBusy(true);
     setError(null);
     try {
@@ -276,7 +299,7 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
 
   function submitMessage(): void {
     const text = draft.trim();
-    if (!activeRoom || isGroupPreview || !text || busy) return;
+    if (readOnly || !activeRoom || isGroupPreview || !text || busy || [...text].length > 4000) return;
     sendTyping(activeRoom.roomId, false);
     void sendWithId({ roomId: activeRoom.roomId, text, clientMessageId: crypto.randomUUID() });
   }
@@ -287,7 +310,7 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
   }
 
   function handleMessageKeyDown(event: KeyboardEvent<HTMLTextAreaElement>): void {
-    if (event.key !== 'Enter' || event.shiftKey) return;
+    if (event.key !== 'Enter' || event.shiftKey || composing.current || event.nativeEvent.isComposing || event.keyCode === 229) return;
     event.preventDefault();
     submitMessage();
   }
@@ -295,7 +318,7 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
   async function createGroup(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     const name = groupName.trim();
-    if (!name || busy) return;
+    if (readOnly || !name || [...name].length > 64 || busy) return;
     setBusy(true);
     setError(null);
     try {
@@ -315,7 +338,7 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
 
   async function removeAccount(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
-    if (busy || !deletePassword) return;
+    if (readOnly || busy || !deletePassword) return;
     setDeleteError(null);
     const deleted = await account.deleteAccount(deletePassword);
     if (!deleted) setDeleteError(account.error ?? 'Could not delete the account. Check your password and try again.');
@@ -327,14 +350,14 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
         <div className={styles.brand}>
           <img src="./talkmato-logo.svg" alt="Talkmato logo" />
           <strong>Talkmato</strong>
-          <div className={styles.accountActions}><button type="button" className={styles.signOut} onClick={() => void account.logout()} disabled={account.busy}>Sign out</button></div>
+          <div className={styles.accountActions}><button type="button" className={styles.signOut} onClick={() => void account.logout()} disabled={account.busy || readOnly}>Sign out</button></div>
         </div>
         <section>
-          <h2>Online now</h2>
+          <h2>{readOnly ? 'Last known online' : 'Online now'}</h2>
           <ul className={styles.userList}>
             {selfFirst(snapshot.users, snapshot.self.userId).map((user) => <li key={user.userId}>
-              <button type="button" className={styles.personButton} onClick={() => void openPrivate(user.userId)} disabled={busy || user.userId === snapshot.self.userId}>
-                <span className={styles.onlineDot} aria-hidden="true" />{user.name}
+              <button type="button" className={styles.personButton} onClick={() => void openPrivate(user.userId)} disabled={readOnly || busy || user.userId === snapshot.self.userId}>
+                <span className={readOnly ? styles.offlineDot : styles.onlineDot} aria-hidden="true" />{user.name}
                 {user.userId === snapshot.self.userId && <small>You</small>}
               </button>
             </li>)}
@@ -353,7 +376,7 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
         </section>
         <section>
           <div className={styles.sectionHeading}>
-            <h2>Groups</h2><button type="button" onClick={() => setShowCreateGroup(true)} aria-label="Create group" disabled={busy}>+</button>
+            <h2>Groups</h2><button type="button" onClick={() => setShowCreateGroup(true)} aria-label="Create group" disabled={readOnly || busy}>+</button>
           </div>
           <ul className={styles.roomList}>
             {groups.map((group) => <li key={group.roomId}>
@@ -363,31 +386,40 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
             </li>)}
           </ul>
         </section>
-        <div className={styles.sidebarFooter}><button type="button" className={styles.deleteAccount} onClick={() => { setDeleteError(null); setShowDeleteAccount(true); }} disabled={account.busy}>Delete account</button></div>
+        <div className={styles.sidebarFooter}><button type="button" className={styles.deleteAccount} onClick={() => { setDeleteError(null); setShowDeleteAccount(true); }} disabled={account.busy || readOnly}>Delete account</button></div>
       </aside>
 
       <main className={styles.conversation}>
+        {readOnly && <p className={styles.connectionNotice} role="status">
+          Connection lost. Cached messages are read-only. Reconnecting…
+          <button type="button" onClick={account.reconnect}>Reconnect</button>
+        </p>}
         <div ref={setFireworkTarget} className={styles.fireworkLayer} data-firework-layer="" />
         {error && <p className={styles.error} role="alert">{error}</p>}
-        {pendingMessage && <button type="button" className={styles.retry} disabled={busy} onClick={() => void sendWithId(pendingMessage)}>Retry last message</button>}
+        {pendingMessage && <button type="button" className={styles.retry} disabled={readOnly || busy} onClick={() => void sendWithId(pendingMessage)}>Retry last message</button>}
         {!activeRoom && <div className={styles.emptyState}><img className={styles.emptyStateIcon} src="./chat-conversation-icon.svg" alt="Chat icon" /><h1>Choose a conversation</h1><p>Select a person or group to open a room.</p></div>}
         {activeRoom && <>
           <header className={styles.roomHeader}>
             <div><p>{activeRoom.kind === 'group' ? 'Group chat' : 'Private chat'}</p><h1>{roomTitle(activeRoom, snapshot.self.userId)}</h1></div>
             {activeRoom.kind === 'group' && <div ref={memberDetailsRef} className={styles.memberDetails}><button type="button" className={styles.memberButton} aria-expanded={showMemberDetails} onClick={() => setShowMemberDetails((shown) => !shown)}>{activeRoom.members.length} {activeRoom.members.length === 1 ? 'member' : 'members'}</button>{showMemberDetails && <div className={styles.memberPopover} role="dialog" aria-label="Group members"><strong>Members</strong><ul>{selfFirst(activeRoom.members, snapshot.self.userId).map((member) => <li key={member.userId}><span>{member.name}</span><small>{member.userId === snapshot.self.userId ? 'You' : member.online ? 'Online' : 'Offline'}</small></li>)}</ul></div>}</div>}
           </header>
-          {isGroupPreview ? <section className={styles.groupPreview}><h2>Join to see the conversation</h2><p>Members are visible before joining. Earlier messages remain private.</p><div className={styles.previewMembers}><h3>Current members</h3><ul>{selfFirst(activeRoom.members, snapshot.self.userId).map((member) => <li key={member.userId}>{member.name}</li>)}</ul></div><button type="button" onClick={() => void joinGroup(activeRoom)} disabled={busy}>Join group</button></section> : <>
-            <section ref={messageAreaRef} className={styles.messageArea}>
-            <ol className={`${styles.messages} ${activeMessages.length === 0 ? styles.messagesEmpty : ''}`} aria-label="Messages" aria-busy={loadingRoomId === activeRoom.roomId}>
-              {loadingRoomId === activeRoom.roomId && <li className={styles.noMessages}>Loading messages…</li>}
-              {loadingRoomId !== activeRoom.roomId && activeMessages.length === 0 && <li className={styles.noMessages}>No messages yet.</li>}
+          {isGroupPreview ? <section className={styles.groupPreview}><h2>Join to see the conversation</h2><p>Members are visible before joining. Earlier messages remain private.</p><div className={styles.previewMembers}><h3>Current members</h3><ul>{selfFirst(activeRoom.members, snapshot.self.userId).map((member) => <li key={member.userId}>{member.name}</li>)}</ul></div><button type="button" onClick={() => void joinGroup(activeRoom)} disabled={readOnly || busy}>Join group</button></section> : <>
+            <section ref={messageAreaRef} className={styles.messageArea} onScroll={() => {
+              const area = messageAreaRef.current;
+              if (area) followLatest.current = area.scrollHeight - area.scrollTop - area.clientHeight < 80;
+            }}>
+            {history.canLoadOlder && <button type="button" className={styles.historyControl} onClick={history.loadOlder} disabled={readOnly || history.loading}>Load older</button>}
+            {history.failed && <div className={styles.historyError} role="alert">Could not load saved messages. <button type="button" onClick={history.retry} disabled={readOnly || history.loading}>Retry history</button></div>}
+            <ol className={`${styles.messages} ${activeMessages.length === 0 ? styles.messagesEmpty : ''}`} aria-label="Messages" aria-busy={history.loading}>
+              {history.loading && activeMessages.length === 0 && <li className={styles.noMessages}>Loading messages…</li>}
+              {!history.loading && activeMessages.length === 0 && <li className={styles.noMessages}>No messages yet.</li>}
               {activeMessages.map((message) => {
                 const own = message.senderId === snapshot.self.userId;
                 const showSender = !own && activeRoom.kind === 'group';
                 return <li key={message.messageId} className={`${styles.messageRow} ${own ? `${styles.ownMessageRow} ${styles.ownMessage}` : ''} ${showSender ? styles.groupMessageRow : ''}`}>
                   {showSender && <strong className={styles.messageSender}>{message.senderName}</strong>}
                   <div className={styles.messageBubble}><p>{message.text}</p><time>{displayTime(message.sentAt)}</time></div>
-                  <MessageEmojiEffect roomId={activeRoom.roomId} messageId={message.messageId} request={account.request}
+                  <MessageEmojiEffect roomId={activeRoom.roomId} messageId={message.messageId} request={account.request} disabled={readOnly}
                     attachments={mergeMessageEmojis(message.emojis ?? [], liveEmojis[message.messageId] ?? [])} seenEmojiIds={seenEmojiIds.current} fireworkTarget={fireworkTarget}
                     onAttachment={attachment => rememberEmoji({ roomId: activeRoom.roomId, messageId: message.messageId, attachment })} />
                 </li>;
@@ -397,15 +429,15 @@ export function ChatWorkspace({ account }: { account: SignedInAccount }) {
             </section>
             <form className={styles.composer} onSubmit={sendMessage}>
               <label className="srOnly" htmlFor="message-draft">Message {roomTitle(activeRoom, snapshot.self.userId)}</label>
-              <textarea id="message-draft" value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={handleMessageKeyDown} placeholder="Write a message…" rows={2} disabled={busy || loadingRoomId === activeRoom.roomId} />
-              <button type="submit" disabled={busy || loadingRoomId === activeRoom.roomId || !draft.trim()}>Send</button>
+              <textarea id="message-draft" value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={handleMessageKeyDown} onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { composing.current = false; }} placeholder="Write a message…" rows={2} disabled={readOnly || busy || history.loading} />
+              <button type="submit" disabled={readOnly || busy || history.loading || !draft.trim() || [...draft.trim()].length > 4000}>Send</button>
             </form>
           </>}
         </>}
       </main>
 
-      {showCreateGroup && <div className={styles.modalBackdrop} role="presentation"><form className={styles.modal} onSubmit={(event) => void createGroup(event)} aria-labelledby="create-group-title"><h2 id="create-group-title">Create group</h2><p>You will be the only member initially. Others choose to join themselves.</p><label htmlFor="group-name">Group name</label><input id="group-name" value={groupName} onChange={(event) => setGroupName(event.target.value)} maxLength={64} autoFocus /><div className={styles.modalActions}><button type="button" onClick={() => setShowCreateGroup(false)}>Cancel</button><button type="submit" disabled={busy || !groupName.trim()}>Create group</button></div></form></div>}
-      {showDeleteAccount && <div className={styles.modalBackdrop} role="presentation"><form className={styles.modal} onSubmit={(event) => void removeAccount(event)} aria-labelledby="delete-account-title"><h2 id="delete-account-title">Delete account?</h2><p>This cannot be undone. Your old messages will remain, but their sender will display as Unknown.</p><label htmlFor="delete-password">Confirm password</label><input id="delete-password" type="password" value={deletePassword} onChange={(event) => setDeletePassword(event.target.value)} autoComplete="current-password" autoFocus />{deleteError && <p className={styles.deleteError} role="alert">{deleteError}</p>}<div className={styles.modalActions}><button type="button" onClick={() => setShowDeleteAccount(false)} disabled={busy}>Cancel</button><button type="submit" className={styles.dangerButton} disabled={busy || !deletePassword}>Delete permanently</button></div></form></div>}
+      {showCreateGroup && <div className={styles.modalBackdrop} role="presentation"><form className={styles.modal} onSubmit={(event) => void createGroup(event)} aria-labelledby="create-group-title"><h2 id="create-group-title">Create group</h2><p>You will be the only member initially. Others choose to join themselves.</p><label htmlFor="group-name">Group name</label><input id="group-name" value={groupName} onChange={(event) => setGroupName(event.target.value)} autoFocus /><div className={styles.modalActions}><button type="button" onClick={() => setShowCreateGroup(false)}>Cancel</button><button type="submit" disabled={readOnly || busy || !groupName.trim() || [...groupName.trim()].length > 64}>Create group</button></div></form></div>}
+      {showDeleteAccount && <div className={styles.modalBackdrop} role="presentation"><form className={styles.modal} onSubmit={(event) => void removeAccount(event)} aria-labelledby="delete-account-title"><h2 id="delete-account-title">Delete account?</h2><p>This cannot be undone. Your old messages will remain, but their sender will display as Unknown.</p><label htmlFor="delete-password">Confirm password</label><input id="delete-password" type="password" value={deletePassword} onChange={(event) => setDeletePassword(event.target.value)} autoComplete="current-password" autoFocus />{deleteError && <p className={styles.deleteError} role="alert">{deleteError}</p>}<div className={styles.modalActions}><button type="button" onClick={() => setShowDeleteAccount(false)} disabled={readOnly || busy}>Cancel</button><button type="submit" className={styles.dangerButton} disabled={readOnly || busy || !deletePassword}>Delete permanently</button></div></form></div>}
     </section>
   );
 }

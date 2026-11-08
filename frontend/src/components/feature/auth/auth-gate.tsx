@@ -10,7 +10,7 @@ import styles from './auth.module.css';
 
 type SignedIn = AccountAuth & {
   snapshot: NonNullable<AccountAuth['snapshot']>;
-  socket: NonNullable<AccountAuth['socket']>;
+  readOnly: boolean;
 };
 
 /** Supplies the same authenticated socket to the conversation UI through children. */
@@ -18,10 +18,12 @@ export function AuthGate({ children }: { children?: (account: SignedIn) => React
   const auth = useAccountAuth();
   const [mode, setMode] = useState<AuthMode>('login');
   const connected = auth.status === 'connected';
-  if (auth.snapshot && auth.socket && connected) {
-    return <section className={styles.account} aria-label="Talkmato account">
-      {children ? children({ ...auth, snapshot: auth.snapshot, socket: auth.socket })
-        : <AccountDirectory snapshot={auth.snapshot} busy={auth.busy} logout={auth.logout} />}
+  const displayed = auth.snapshot ?? auth.cachedSnapshot;
+  if (displayed) {
+    const readOnly = !auth.snapshot || !connected;
+    return <section key={displayed.self.userId} className={styles.account} aria-label="Talkmato account">
+      {children ? children({ ...auth, snapshot: displayed, readOnly })
+        : <AccountDirectory snapshot={displayed} busy={auth.busy || readOnly} logout={auth.logout} />}
     </section>;
   }
   if (connected && !auth.sessionChecked) {
